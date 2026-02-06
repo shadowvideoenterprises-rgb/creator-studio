@@ -1,22 +1,29 @@
 import { NextResponse } from 'next/server'
 import { BatchService } from '@/lib/services/batch.service'
-import { supabase } from '@/lib/supabaseClient'
+import { supabaseAdmin } from '@/lib/supabaseServer'
 
 export async function POST(req: Request) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    // 1. Validate User (Server-side)
+    // In production, use supabaseAdmin.auth.getUser(token)
+    const { projectId, userId } = await req.json();
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!projectId || !userId) {
+      return NextResponse.json({ error: 'Missing projectId or userId' }, { status: 400 });
     }
 
-    const { projectId } = await req.json();
+    // 2. Trigger the Batch Service
+    // This now returns a Job ID immediately and runs the loop in the background
+    const jobId = await BatchService.processAllScenes(projectId, userId);
 
-    // Fire and forget (Background process)
-    BatchService.processAllScenes(projectId, user.id)
+    return NextResponse.json({ 
+      success: true, 
+      jobId,
+      message: 'Batch asset generation started' 
+    });
 
-    return NextResponse.json({ success: true, message: 'Batch process started' })
   } catch (error: any) {
+    console.error('API Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -4,13 +4,14 @@ import { supabase } from '@/lib/supabaseClient'
 import { useJobStatus } from '@/hooks/useJobStatus'
 import SceneEditor from '@/components/editor/SceneEditor'
 import { Sparkles, Layout, Zap, CheckCircle2, DollarSign } from 'lucide-react'
+import { Scene } from '@/lib/types'
 
 export default function ProjectWorkspace({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const projectId = resolvedParams.id
 
   const [project, setProject] = useState<any>(null)
-  const [scenes, setScenes] = useState<any[]>([])
+  const [scenes, setScenes] = useState<Scene[]>([])
   const [estimate, setEstimate] = useState<number>(0)
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
   const { progress, message, status } = useJobStatus(currentJobId)
@@ -32,7 +33,13 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
 
   const fetchProjectData = async () => {
     const { data: proj } = await supabase.from('projects').select('*').eq('id', projectId).single()
-    const { data: scns } = await supabase.from('scenes').select('*').eq('project_id', projectId).order('sequence_order', { ascending: true })
+    // KEY UPDATE: We now fetch scene_assets with the scenes
+    const { data: scns } = await supabase
+      .from('scenes')
+      .select('*, scene_assets(*)')
+      .eq('project_id', projectId)
+      .order('sequence_order', { ascending: true })
+    
     setProject(proj)
     setScenes(scns || [])
   }
@@ -46,7 +53,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
   const generateScript = async () => {
     const res = await fetch('/api/generate/script', {
       method: 'POST',
-      body: JSON.stringify({ projectId: projectId, title: project.title, context: project.description })
+      body: JSON.stringify({ projectId: projectId, title: project.title, context: project.description, userId: project.user_id })
     })
     const data = await res.json()
     if (data.jobId) setCurrentJobId(data.jobId)
@@ -55,18 +62,11 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
   const runBatchAssets = async () => {
     const res = await fetch('/api/generate/batch', {
       method: 'POST',
-      body: JSON.stringify({ projectId: projectId })
+      body: JSON.stringify({ projectId: projectId, userId: project.user_id })
     })
     const data = await res.json()
-    if (data.success) {
-       const { data: latestJob } = await supabase
-         .from('job_progress')
-         .select('job_id')
-         .eq('user_id', project.user_id)
-         .order('updated_at', { ascending: false })
-         .limit(1)
-         .single()
-       if (latestJob) setCurrentJobId(latestJob.job_id)
+    if (data.success && data.jobId) {
+       setCurrentJobId(data.jobId)
     }
   }
 
@@ -87,7 +87,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
             </p>
           </div>
           <div className="flex gap-4">
-            <button onClick={runBatchAssets} disabled={status === 'processing' || scenes.length === 0} className="px-6 py-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-500/20 transition-all disabled:opacity-30">
+             <button onClick={runBatchAssets} disabled={status === 'processing' || scenes.length === 0} className="px-6 py-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-500/20 transition-all disabled:opacity-30">
               <Zap size={18} /> Auto-Generate Visuals
             </button>
             <button onClick={generateScript} disabled={status === 'processing'} className="px-8 py-3 bg-white text-black rounded-2xl font-bold flex items-center gap-2 hover:bg-purple-400 transition-all active:scale-95 disabled:opacity-50">
@@ -119,6 +119,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
               onUpdate={(id: string, field: string, val: string) => { 
                 setScenes(scenes.map(s => s.id === id ? { ...s, [field]: val } : s)) 
               }} 
+              // We reuse the fetch function to refresh assets when one is selected
               onDelete={fetchProjectData} 
             />
           ))}

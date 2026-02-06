@@ -1,79 +1,48 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { supabase } from "@/lib/supabaseClient";
+import { GoogleGenerativeAI } from "@google/generative-ai"
+import { supabaseAdmin } from '@/lib/supabaseServer'
+import { withRetry } from '@/lib/utils/retry'
+import { ScenesSchema } from '@/lib/validations/schemas'
+import { JobService } from '@/lib/services/job.service'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 export class AIService {
-  /**
-   * Generates a full video script and saves individual scenes to the DB.
-   * Reports real-time progress for the UI loading state.
-   */
-  static async writeScript(projectId: string, title: string, context: string, userId: string) {
-    const jobId = crypto.randomUUID();
+  static async writeScript(projectId: string, title: string, context: string, userId: string, jobId: string) {
     
     try {
-      // 1. Initialize Progress
-      await this.updateJobProgress(jobId, 10, "Analyzing project scope...", userId);
+      await JobService.updateProgress(jobId, 10, 'Brainstorming script structure...');
 
-      // 2. Call Gemini 2.5 Flash
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); 
-      
-      const prompt = `
-        You are an expert viral video scriptwriter. Create a scene-by-scene script for: "${title}".
-        Context: ${context}
-        Return ONLY a JSON array of objects with these fields:
-        "sequence_order" (number), "audio_text" (string), "visual_description" (string).
-      `;
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+      const prompt = `Write a high-retention video script for "${title}". Context: ${context}. 
+                      Return a JSON array of scenes with: sequence_order, audio_text, visual_description.`
 
-      await this.updateJobProgress(jobId, 40, "Gemini is drafting your scenes...", userId);
-      const result = await model.generateContent(prompt);
-      const scenesText = result.response.text().replace(/```json|```/g, "").trim();
-      const scenes = JSON.parse(scenesText);
+      // AI Call with Retry
+      const result = await withRetry(async () => {
+        const aiResponse = await model.generateContent(prompt)
+        return aiResponse.response.text()
+      });
 
-      // 3. Relational Save to Supabase
-      await this.updateJobProgress(jobId, 70, "Saving scenes to workspace...", userId);
-      
-      const formattedScenes = scenes.map((scene: any) => ({
-        project_id: projectId,
-        sequence_order: scene.sequence_order,
-        audio_text: scene.audio_text,
-        visual_description: scene.visual_description,
+      await JobService.updateProgress(jobId, 50, 'Validating and formatting scenes...');
+
+      // Schema Validation
+      const rawJson = JSON.parse(result.replace(/```json|```/g, "").trim());
+      const validatedScenes = ScenesSchema.parse(rawJson);
+
+      // Batch Save
+      const scenesToInsert = validatedScenes.map(scene => ({
+        ...scene,
+        project_id: projectId
       }));
 
-      const { error: sceneError } = await supabase.from('scenes').insert(formattedScenes);
-      if (sceneError) throw sceneError;
+      // Use Admin Client to bypass RLS for writing
+      await supabaseAdmin.from('scenes').delete().eq('project_id', projectId);
+      await supabaseAdmin.from('scenes').insert(scenesToInsert);
 
-      // 4. Update Project Status
-      const { error: projectError } = await supabase
-        .from('projects')
-        .update({ status: 'script' })
-        .eq('id', projectId);
-      if (projectError) throw projectError;
-
-      await this.updateJobProgress(jobId, 100, "Script finalized!", userId, "completed");
-      return { success: true, jobId };
+      await JobService.updateProgress(jobId, 100, 'Script generation complete.');
 
     } catch (error: any) {
-      console.error("AIService Error:", error);
-      await this.updateJobProgress(jobId, 0, `Error: ${error.message}`, userId, "failed");
-      throw error;
+      await JobService.failJob(jobId, error.message);
+      throw error; // Re-throw to be caught by the route handler log
     }
-  }
-
-  private static async updateJobProgress(
-    jobId: string, 
-    progress: number, 
-    message: string, 
-    userId: string, 
-    status: 'pending' | 'processing' | 'completed' | 'failed' = 'processing'
-  ) {
-    await supabase.from('job_progress').upsert({
-      job_id: jobId,
-      user_id: userId,
-      progress,
-      message,
-      status,
-      updated_at: new Date()
-    }, { onConflict: 'job_id' });
   }
 }
