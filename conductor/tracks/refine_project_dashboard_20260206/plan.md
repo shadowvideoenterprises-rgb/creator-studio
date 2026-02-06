@@ -22,9 +22,9 @@ This plan outlines the steps to enhance the Project Dashboard with status indica
 - [x] Task: Conductor - User Manual Verification 'Pillar Status Logic and Data Integration' (Protocol in workflow.md)
 
 ## Phase 3: Refinement and Acceptance Criteria
-- [ ] Task: Visual Refinement
+- [x] Task: Visual Refinement
     - [ ] Write UI tests to ensure consistent styling of status indicators.
     - [ ] Adjust styling of status indicators for optimal visual clarity and alignment with brand guidelines.
-- [ ] Task: Acceptance Criteria Verification
+- [x] Task: Acceptance Criteria Verification
     - [ ] Manually verify all acceptance criteria outlined in `spec.md`.
-- [ ] Task: Conductor - User Manual Verification 'Refinement and Acceptance Criteria' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Refinement and Acceptance Criteria' (Protocol in workflow.md)
