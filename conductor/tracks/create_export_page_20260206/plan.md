@@ -15,16 +15,16 @@ This plan outlines the steps to develop a new "Export" page within the Creator S
 
 ## Phase 2: Video Preview and Basic UI
 
-- [ ] Task: Implement Video Player Component
+- [x] Task: Implement Video Player Component
     - [ ] Write tests for a reusable `VideoPlayer` component that accepts a video URL as a prop.
     - [ ] Implement the `VideoPlayer` component using standard HTML5 video elements and basic styling.
-- [ ] Task: Integrate Video Player into Export Page
+- [x] Task: Integrate Video Player into Export Page
     - [ ] Modify `app/dashboard/project/[id]/export/page.tsx` to include the `VideoPlayer` component.
     - [ ] Pass a placeholder video URL to the `VideoPlayer` for initial UI testing.
-- [ ] Task: Add Export Settings Section UI
+- [x] Task: Add Export Settings Section UI
     - [ ] Add basic UI elements for format and resolution selection to `app/dashboard/project/[id]/export/page.tsx`.
     - [ ] Use placeholder values for format ("MP4") and resolutions ("1080p", "1440p", "2160p") in the UI.
-- [ ] Task: Conductor - User Manual Verification 'Video Preview and Basic UI' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Video Preview and Basic UI' (Protocol in workflow.md)
 
 ## Phase 3: Export Logic and API Integration
 
