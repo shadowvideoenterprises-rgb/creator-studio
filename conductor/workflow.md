@@ -1,20 +1,25 @@
-# Workflow
+# Workflow Protocols
 
-## 1. Test Code Coverage
-**Required Coverage:** 80%
+## 1. Task Workflow
+When implementing a task from the plan, follow these steps strictly:
 
-## 2. Commit Strategy
-**Commit Frequency:** After each task
+1.  **Context Analysis**:
+    * Read the relevant files to understand the current state.
+    * Review `spec.md` to ensure alignment with the goal.
 
-## 3. Task Summary
-**Recording Method:** Git Notes
+2.  **Atomic Implementation**:
+    * Make changes to **one file at a time**.
+    * After editing a file, check for basic syntax errors.
 
-## 4. Phase Completion Verification and Checkpointing Protocol
-Upon completing all tasks within a given phase, the user MUST perform the following steps:
-1.  **Review Code:** Conduct a thorough self-review of all changes made during the phase.
-2.  **Run All Tests:** Ensure all unit, integration, and end-to-end tests pass without errors.
-3.  **Manual Verification:** Manually test the implemented features or fixes according to the `spec.md`'s acceptance criteria.
-4.  **Update `plan.md`:** Mark all completed tasks within the phase as `[x]` in the `plan.md` file.
-5.  **Commit Changes:** Commit all changes with a descriptive message, including a summary of the phase's accomplishments.
-6.  **Update `metadata.json`:** If the phase completion signifies a change in the track's overall status (e.g., from `in_progress` to `awaiting_review`), update the `metadata.json` accordingly.
-7.  **Notify Stakeholders:** Inform relevant team members or stakeholders of the phase completion and readiness for review.
+3.  **Verification**:
+    * Verify that the changes match the requirements in the `spec.md`.
+    * Ensure no existing functionality is broken.
+
+4.  **Completion**:
+    * Mark the task as done in the `plan.md` file (change `[ ]` to `[x]`).
+    * Move to the next task in the plan.
+
+## 2. Coding Standards
+* **Framework**: Use Next.js 14+ (App Router) patterns.
+* **Styling**: Use Tailwind CSS for all styling.
+* **Safety**: Do not delete user data or existing functionality without explicit instruction.

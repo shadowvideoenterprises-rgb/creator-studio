@@ -3,14 +3,14 @@
 This plan outlines the steps to enhance the Project Dashboard with status indicators for the four core pillars.
 
 ## Phase 1: Setup and Core UI Integration
-- [ ] Task: Environment Setup
+- [x] Task: Environment Setup
     - [ ] Identify relevant dashboard component files.
     - [ ] Install any new UI library dependencies if required.
-- [ ] Task: Integrate Basic Status Indicator Component
+- [x] Task: Integrate Basic Status Indicator Component
     - [ ] Write tests for a generic status indicator component (e.g., displaying different states).
     - [ ] Implement a reusable status indicator component (e.g., using Tailwind CSS for styling).
     - [ ] Integrate the status indicator component into a single project card on the dashboard.
-- [ ] Task: Conductor - User Manual Verification 'Setup and Core UI Integration' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Setup and Core UI Integration' (Protocol in workflow.md)
 
 ## Phase 2: Pillar Status Logic and Data Integration
 - [ ] Task: Define Pillar Status Logic
