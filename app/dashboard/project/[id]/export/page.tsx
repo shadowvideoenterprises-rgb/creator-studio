@@ -1,8 +1,46 @@
 'use client'
 
+import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import VideoPlayer from '@/components/VideoPlayer';
 
 export default function ExportPage() {
+  const [resolution, setResolution] = useState('1080p');
+  const [isExporting, setIsExporting] = useState(false);
+  const params = useParams();
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const response = await fetch(`/api/export/${params.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ resolution }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `export_${params.id}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+    } catch (error) {
+      console.error(error);
+      alert('An error occurred during export.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 text-white p-8">
       <div className="max-w-4xl mx-auto">
@@ -24,14 +62,23 @@ export default function ExportPage() {
               </div>
               <div>
                 <label htmlFor="resolution" className="block text-sm font-medium text-gray-400 mb-2">Resolution</label>
-                <select id="resolution" className="w-full bg-gray-800 border-gray-700 rounded-lg p-2">
+                <select 
+                  id="resolution" 
+                  className="w-full bg-gray-800 border-gray-700 rounded-lg p-2"
+                  value={resolution}
+                  onChange={(e) => setResolution(e.target.value)}
+                >
                   <option>1080p</option>
                   <option>1440p</option>
                   <option>2160p</option>
                 </select>
               </div>
-              <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-all">
-                Export Video
+              <button 
+                onClick={handleExport}
+                disabled={isExporting}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-all disabled:bg-gray-600"
+              >
+                {isExporting ? 'Exporting...' : 'Export Video'}
               </button>
             </div>
           </div>

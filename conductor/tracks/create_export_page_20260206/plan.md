@@ -28,16 +28,16 @@ This plan outlines the steps to develop a new "Export" page within the Creator S
 
 ## Phase 3: Export Logic and API Integration
 
-- [ ] Task: Implement Format and Resolution Selection Logic
+- [x] Task: Implement Format and Resolution Selection Logic
     - [ ] Write tests for the state management of selected format and resolution on the export page.
     - [ ] Implement the logic to handle user selection of format and resolution.
-- [ ] Task: Create Placeholder Export API Route
+- [x] Task: Create Placeholder Export API Route
     - [ ] Create a new API route `app/api/export/[id]/route.ts` to handle export requests.
     - [ ] Implement an API route that generates and downloads a dummy ZIP file containing a text file 'script.txt' and a sample image, to simulate a real export bundle.
-- [ ] Task: Integrate Export Action with API
+- [x] Task: Integrate Export Action with API
     - [ ] Write tests for the "Export Video" button's functionality, ensuring it calls the export API.
     - [ ] Modify `app/dashboard/project/[id]/export/page.tsx` to connect the "Export Video" button to the API route, passing selected settings.
-- [ ] Task: Conductor - User Manual Verification 'Export Logic and API Integration' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Export Logic and API Integration' (Protocol in workflow.md)
 
 ## Phase 4: Refinement, Testing, and Verification
 
