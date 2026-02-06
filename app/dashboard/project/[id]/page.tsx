@@ -154,6 +154,9 @@ export default function ProjectWorkspace() {
           <button onClick={() => setShowPlayer(true)} className="bg-pink-600 hover:bg-pink-500 px-6 py-2 rounded text-sm font-bold shadow-lg transition-all flex items-center gap-2">
             ▶ Watch
           </button>
+          <button onClick={() => router.push(`/dashboard/project/${project.id}/export`)} className="bg-teal-600 hover:bg-teal-500 px-6 py-2 rounded text-sm font-bold shadow-lg transition-all">
+            Export
+          </button>
         </div>
       </div>
 
