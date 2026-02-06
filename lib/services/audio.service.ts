@@ -1,59 +1,74 @@
 import { supabaseAdmin } from '../supabaseServer'
-import * as googleTTS from 'google-tts-api';
 
 export class AudioService {
   
-  static async generateVoiceover(sceneId: string, text: string) {
-    console.log(`🎤 Generating (Free) Audio for scene ${sceneId}...`);
+  /**
+   * Main Generator (Used by API)
+   */
+  static async generateAudio(projectId: string, sceneId: string, text: string, userId: string, userKeys: any = {}, selectedModel: string = 'mock-free') {
+    console.log(`??? Generating audio for scene ${sceneId.slice(0, 5)}... Model: ${selectedModel}`);
 
-    try {
-      // 1. Get the direct URL from Google TTS (truncated to 200 chars for safety)
-      const safeText = text.substring(0, 200);
-      
-      const audioUrl = googleTTS.getAudioUrl(safeText, {
-        lang: 'en',
-        slow: false,
-        host: 'https://translate.google.com',
-      });
+    let assetUrl = null;
+    let assetProvider = 'placeholder';
 
-      // 2. Fetch the actual MP3 data (Server-side download)
-      const response = await fetch(audioUrl);
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      // 3. Upload to Supabase Storage
-      const fileName = `audio/${sceneId}-${Date.now()}.mp3`;
-      
-      const { data, error: uploadError } = await supabaseAdmin
-        .storage
-        .from('project-assets')
-        .upload(fileName, buffer, {
-          contentType: 'audio/mpeg',
-          upsert: true
-        });
-
-      if (uploadError) throw uploadError;
-
-      // 4. Get Public URL
-      const { data: { publicUrl } } = supabaseAdmin
-        .storage
-        .from('project-assets')
-        .getPublicUrl(fileName);
-
-      // 5. Update Scene Record
-      await supabaseAdmin
-        .from('scenes')
-        .update({ 
-          audio_url: publicUrl 
-        })
-        .eq('id', sceneId);
-
-      console.log(`✅ Audio saved: ${publicUrl}`);
-      return publicUrl;
-
-    } catch (error) {
-      console.error('⚠️ Audio generation failed:', error);
-      throw error;
+    // --- CASE 1: Mock / Free Mode ---
+    if (selectedModel === 'mock-free' || !userKeys?.elevenlabs) {
+       assetUrl = `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3`; 
+       assetProvider = 'mock_audio';
     }
+
+    if (assetUrl) {
+      // Cleanup old audio
+      await supabaseAdmin.from('scene_assets').delete().eq('scene_id', sceneId).eq('asset_type', 'audio');
+
+      const { data, error } = await supabaseAdmin
+        .from('scene_assets')
+        .insert({
+          project_id: projectId,
+          scene_id: sceneId,
+          asset_type: 'audio',
+          asset_url: assetUrl,
+          provider: assetProvider,
+          status: 'ready',
+          is_selected: true
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+    return null;
+  }
+
+  /**
+   * Compatibility Alias (Fixed Type Error)
+   */
+  static async generateVoiceover(sceneId: string, text: string) {
+    console.log('?? Using compatibility alias: generateVoiceover');
+    
+    // 1. Fetch scene and project info
+    const { data: scene } = await supabaseAdmin
+      .from('scenes')
+      .select('project_id, project:projects(user_id)')
+      .eq('id', sceneId)
+      .single();
+
+    if (!scene) throw new Error(`Scene ${sceneId} not found`);
+
+    // --- FIX: Handle if project is returned as an array or object ---
+    const projectData = scene.project;
+    // @ts-ignore
+    const userId = Array.isArray(projectData) ? projectData[0].user_id : projectData.user_id;
+
+    // 2. Call main function
+    return this.generateAudio(
+      scene.project_id, 
+      sceneId, 
+      text, 
+      userId, 
+      {}, 
+      'mock-free'
+    );
   }
 }

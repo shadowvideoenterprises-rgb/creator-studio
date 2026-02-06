@@ -1,35 +1,52 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+'use client'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabaseClient'
 
 export function useJobStatus(jobId: string | null) {
-  const [progress, setProgress] = useState(0);
-  const [message, setMessage] = useState('Waiting to start...');
-  const [status, setStatus] = useState('idle');
+  const [status, setStatus] = useState<string>('idle')
+  const [progress, setProgress] = useState<number>(0)
+  const [message, setMessage] = useState<string>('')
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId) return
 
-    const checkStatus = async () => {
-      const { data, error } = await supabase
-        .from('job_progress')
-        .select('progress, message, status')
-        .eq('job_id', jobId)
-        .single();
+    let intervalId: NodeJS.Timeout
 
+    const fetchJob = async () => {
+      const { data } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('id', jobId)
+        .single()
+      
       if (data) {
-        setProgress(data.progress);
-        setMessage(data.message);
-        setStatus(data.status);
-
-        if (data.status === 'completed' || data.status === 'failed') {
-          clearInterval(interval);
-        }
+        setStatus(data.status)
+        setProgress(data.progress)
+        setMessage(data.message)
       }
-    };
+    }
 
-    const interval = setInterval(checkStatus, 1500);
-    return () => clearInterval(interval);
-  }, [jobId]);
+    // 1. Fetch immediately
+    fetchJob()
 
-  return { progress, message, status };
+    // 2. Poll every 1 second (Backup for missed events)
+    intervalId = setInterval(fetchJob, 1000)
+
+    // 3. Realtime Subscription (Primary method)
+    const channel = supabase
+      .channel(`job-${jobId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'jobs', filter: `id=eq.${jobId}` }, (payload: any) => {
+           setStatus(payload.new.status)
+           setProgress(payload.new.progress)
+           setMessage(payload.new.message)
+      })
+      .subscribe()
+
+    return () => { 
+      supabase.removeChannel(channel)
+      clearInterval(intervalId) 
+    }
+  }, [jobId])
+
+  return { status, progress, message }
 }
