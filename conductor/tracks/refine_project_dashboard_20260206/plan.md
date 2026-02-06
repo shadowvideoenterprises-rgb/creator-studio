@@ -13,13 +13,13 @@ This plan outlines the steps to enhance the Project Dashboard with status indica
 - [x] Task: Conductor - User Manual Verification 'Setup and Core UI Integration' (Protocol in workflow.md)
 
 ## Phase 2: Pillar Status Logic and Data Integration
-- [ ] Task: Define Pillar Status Logic
+- [x] Task: Define Pillar Status Logic
     - [ ] Write tests for functions that determine the status of each pillar based on project data.
     - [ ] Implement functions to determine the status of each pillar (Ideate, Write, Visualize, Launch) based on existing project data structures.
-- [ ] Task: Integrate Pillar Status into Dashboard
+- [x] Task: Integrate Pillar Status into Dashboard
     - [ ] Write tests to verify correct pillar status display on the dashboard.
     - [ ] Pass calculated pillar statuses to the status indicator components on the dashboard.
-- [ ] Task: Conductor - User Manual Verification 'Pillar Status Logic and Data Integration' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Pillar Status Logic and Data Integration' (Protocol in workflow.md)
 
 ## Phase 3: Refinement and Acceptance Criteria
 - [ ] Task: Visual Refinement

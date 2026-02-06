@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import StatusBadge from '@/components/StatusBadge';
 import { supabase } from '@/lib/supabaseClient'
+import { getIdeateStatus, getWriteStatus, getVisualizeStatus, getLaunchStatus } from '@/lib/pillarStatus';
 
 export default function Dashboard() {
   const router = useRouter()
@@ -10,7 +11,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchProjects = async () => {
-      const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
+      const { data } = await supabase.from('projects').select('*,scenes(*)').order('created_at', { ascending: false })
       if (data) setProjects(data)
     }
     fetchProjects()
@@ -60,10 +61,10 @@ export default function Dashboard() {
                         </p>
                     </div>
                     <div className="mt-4 pt-4 border-t border-gray-800 space-y-3">
-                        <StatusBadge status="Complete" label="Ideate" />
-                        <StatusBadge status="Not Started" label="Write" />
-                        <StatusBadge status="In Progress" label="Visualize" />
-                        <StatusBadge status="Coming Soon" label="Launch" />
+                        <StatusBadge status={getIdeateStatus(p)} label="Ideate" />
+                        <StatusBadge status={getWriteStatus(p)} label="Write" />
+                        <StatusBadge status={getVisualizeStatus(p)} label="Visualize" />
+                        <StatusBadge status={getLaunchStatus()} label="Launch" />
                     </div>
                 </div>
             ))}
