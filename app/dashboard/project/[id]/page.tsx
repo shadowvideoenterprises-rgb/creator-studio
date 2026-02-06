@@ -3,7 +3,8 @@ import { useState, useEffect, use } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useJobStatus } from '@/hooks/useJobStatus'
 import SceneEditor from '@/components/editor/SceneEditor'
-import { Sparkles, Layout, Zap, CheckCircle2, DollarSign, Download, Volume2 } from 'lucide-react'
+import MarketingModal from '@/components/marketing/MarketingModal'
+import { Sparkles, Layout, Zap, CheckCircle2, DollarSign, Download, Volume2, Megaphone } from 'lucide-react'
 import { Scene } from '@/lib/types'
 
 export default function ProjectWorkspace({ params }: { params: Promise<{ id: string }> }) {
@@ -14,7 +15,13 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
   const [scenes, setScenes] = useState<Scene[]>([])
   const [estimate, setEstimate] = useState<number>(0)
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+  
+  // Modal States
   const [isExporting, setIsExporting] = useState(false)
+  const [showMarketing, setShowMarketing] = useState(false)
+  const [isGeneratingMarketing, setIsGeneratingMarketing] = useState(false)
+  const [marketingData, setMarketingData] = useState<any>(null)
+
   const { progress, message, status } = useJobStatus(currentJobId)
 
   useEffect(() => {
@@ -41,6 +48,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
       .order('sequence_order', { ascending: true })
     
     setProject(proj)
+    setMarketingData(proj?.marketing_data || null)
     setScenes(scns || [])
   }
 
@@ -65,6 +73,18 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
     } catch (e) { alert('Export failed') } finally { setIsExporting(false) }
   }
 
+  const handleGenerateMarketing = async () => {
+    setIsGeneratingMarketing(true)
+    try {
+      const res = await fetch('/api/marketing', {
+        method: 'POST',
+        body: JSON.stringify({ projectId })
+      })
+      const { data } = await res.json()
+      setMarketingData(data)
+    } catch (e) { console.error(e) } finally { setIsGeneratingMarketing(false) }
+  }
+
   const generateScript = async () => {
     const res = await fetch('/api/generate/script', {
       method: 'POST',
@@ -83,7 +103,6 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
     if (data.success && data.jobId) setCurrentJobId(data.jobId)
   }
 
-  // NEW: Audio Trigger
   const runBatchAudio = async () => {
     const res = await fetch('/api/generate/audio', {
       method: 'POST',
@@ -95,6 +114,14 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-slate-200 p-8 pb-32">
+      <MarketingModal 
+        isOpen={showMarketing} 
+        onClose={() => setShowMarketing(false)}
+        data={marketingData}
+        onGenerate={handleGenerateMarketing}
+        isGenerating={isGeneratingMarketing}
+      />
+
       <div className="max-w-5xl mx-auto space-y-8">
         <div className="flex justify-between items-end border-b border-white/5 pb-8">
           <div className="space-y-2">
@@ -110,13 +137,17 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
             </p>
           </div>
           <div className="flex gap-4">
-             <button onClick={handleExport} disabled={isExporting} className="px-4 py-3 bg-white/5 border border-white/10 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-white/10 transition-all">
-               <Download size={18} /> {isExporting ? 'Bundling...' : 'Export JSON'}
+             {/* NEW: Marketing Button */}
+             <button onClick={() => setShowMarketing(true)} className="px-4 py-3 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-2xl font-bold flex items-center gap-2 hover:bg-pink-500/20 transition-all">
+               <Megaphone size={18} /> Marketing
              </button>
 
-             {/* NEW: Audio Button */}
+             <button onClick={handleExport} disabled={isExporting} className="px-4 py-3 bg-white/5 border border-white/10 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-white/10 transition-all">
+               <Download size={18} /> Export
+             </button>
+
              <button onClick={runBatchAudio} disabled={status === 'processing' || scenes.length === 0} className="px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-bold flex items-center gap-2 hover:bg-emerald-500/20 transition-all disabled:opacity-30">
-               <Volume2 size={18} /> Generate Audio
+               <Volume2 size={18} /> Audio
              </button>
 
              <button onClick={runBatchAssets} disabled={status === 'processing' || scenes.length === 0} className="px-6 py-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-500/20 transition-all disabled:opacity-30">
