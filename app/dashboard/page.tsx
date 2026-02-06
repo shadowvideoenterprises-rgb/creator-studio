@@ -5,120 +5,59 @@ import { supabase } from '@/lib/supabaseClient'
 
 export default function Dashboard() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
   const [projects, setProjects] = useState<any[]>([])
-  const [newProjectName, setNewProjectName] = useState('')
-  const [loading, setLoading] = useState(true)
 
-  // 1. Fetch User & Projects on Load
   useEffect(() => {
-    async function getData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/')
-        return
-      }
-      setUser(user)
-
-      // Fetch projects for this user
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false })
-      
+    const fetchProjects = async () => {
+      const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
       if (data) setProjects(data)
-      setLoading(false)
     }
-    getData()
-  }, [router])
-
-  // 2. Handle Creating a New Project
-  const createProject = async () => {
-    if (!newProjectName.trim()) return
-
-    const { data, error } = await supabase
-      .from('projects')
-      .insert([
-        { title: newProjectName, user_id: user.id }
-      ])
-      .select()
-
-    if (error) {
-      console.error('Error creating project:', error)
-    } else {
-      // Add the new project to the list instantly (no refresh needed)
-      setProjects([data[0], ...projects])
-      setNewProjectName('') // Clear the input
-    }
-  }
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
-  }
-
-  if (loading) return <div className="p-10 text-white bg-gray-900 min-h-screen">Loading...</div>
+    fetchProjects()
+  }, [])
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <div className="max-w-4xl mx-auto">
-        
-        {/* Header */}
-        <div className="flex justify-between items-center mb-12 border-b border-gray-700 pb-4">
-          <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
-            🚀 Creator Dashboard
-          </h1>
-          <button onClick={handleSignOut} className="text-gray-400 hover:text-white transition">
-            Sign Out
-          </button>
-        </div>
-
-        {/* "Create New" Section */}
-        <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 mb-8">
-          <h2 className="text-xl font-bold mb-4">Start a New Project</h2>
-          <div className="flex gap-4">
-            <input
-              type="text"
-              placeholder="Project Name (e.g., YouTube History Video)"
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              className="flex-1 bg-gray-900 border border-gray-600 rounded p-3 text-white focus:outline-none focus:border-purple-500"
-              onKeyDown={(e) => e.key === 'Enter' && createProject()}
-            />
+    <div className="min-h-screen bg-gray-950 text-white p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex justify-between items-center mb-10">
+            <h1 className="text-3xl font-bold">Creator Studio</h1>
             <button 
-              onClick={createProject}
-              className="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded font-bold transition"
+                onClick={() => router.push('/dashboard/ideation')}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 rounded-lg font-bold shadow-lg hover:shadow-purple-500/20 transition-all transform hover:scale-105"
             >
-              + Create
+                ✨ New AI Project
             </button>
-          </div>
         </div>
 
         {/* Project List */}
-        <div className="grid grid-cols-1 gap-4">
-          <h2 className="text-2xl font-bold mb-2">Your Projects</h2>
-          
-          {projects.length === 0 ? (
-            <p className="text-gray-500 italic">No projects yet. Create one above!</p>
-          ) : (
-            projects.map((project) => (
-              <div 
-                key={project.id} 
-                onClick={() => router.push(`/dashboard/project/${project.id}`)}
-                className="bg-gray-800 p-5 rounded border border-gray-700 hover:border-purple-500 transition cursor-pointer flex justify-between items-center"
-              >
-                <div>
-                  <h3 className="text-lg font-bold">{project.title}</h3>
-                  <span className="text-xs uppercase tracking-wider text-gray-400 bg-gray-900 px-2 py-1 rounded">
-                    {project.status}
-                  </span>
+        <div className="grid md:grid-cols-3 gap-6">
+            {/* Create New Card (Shortcut) */}
+            <div 
+                onClick={() => router.push('/dashboard/ideation')}
+                className="border-2 border-dashed border-gray-800 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-purple-500 hover:bg-gray-900 transition-all group min-h-[200px]"
+            >
+                <span className="text-4xl mb-2 group-hover:scale-110 transition-transform">💡</span>
+                <span className="font-bold text-gray-400 group-hover:text-white">Generate New Idea</span>
+            </div>
+
+            {/* Existing Projects */}
+            {projects.map((p) => (
+                <div 
+                    key={p.id}
+                    onClick={() => router.push(`/dashboard/project/${p.id}`)}
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-6 cursor-pointer hover:border-gray-600 transition-all hover:shadow-xl"
+                >
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="bg-blue-900/30 text-blue-400 text-xs px-2 py-1 rounded font-bold uppercase">
+                            {p.status || 'Draft'}
+                        </div>
+                        <span className="text-gray-500 text-xs">{new Date(p.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <h3 className="font-bold text-lg mb-2 truncate">{p.title}</h3>
+                    <p className="text-gray-400 text-sm line-clamp-2">
+                        {p.content ? "Script generated" : "Empty project"}
+                    </p>
                 </div>
-                <div className="text-gray-500 text-sm">
-                  {new Date(project.created_at).toLocaleDateString()}
-                </div>
-              </div>
-            ))
-          )}
+            ))}
         </div>
       </div>
     </div>
