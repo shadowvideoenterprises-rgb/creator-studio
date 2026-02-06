@@ -113,7 +113,14 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
 
         <div className="grid gap-8">
           {scenes.map((scene) => (
-            <SceneEditor key={scene.id} scene={scene} onUpdate={(id, field, val) => { setScenes(scenes.map(s => s.id === id ? { ...s, [field]: val } : s)) }} onDelete={fetchProjectData} />
+            <SceneEditor 
+              key={scene.id} 
+              scene={scene} 
+              onUpdate={(id: string, field: string, val: string) => { 
+                setScenes(scenes.map(s => s.id === id ? { ...s, [field]: val } : s)) 
+              }} 
+              onDelete={fetchProjectData} 
+            />
           ))}
         </div>
       </div>
