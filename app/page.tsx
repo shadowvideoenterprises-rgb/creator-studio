@@ -20,12 +20,13 @@ export default function Home() {
 
         {/* Login Box */}
         <div className="bg-gray-800 p-8 rounded-lg border border-gray-700 shadow-xl">
-          <Auth
+         <Auth
             supabaseClient={supabase}
             appearance={{ theme: ThemeSupa }}
             theme="dark"
-            providers={[]} // We will add Google later
-            redirectTo="http://localhost:3000/dashboard"
+            providers={[]}
+            // This line automatically detects if you are on Localhost or Vercel:
+            redirectTo={typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined}
           />
         </div>
 
