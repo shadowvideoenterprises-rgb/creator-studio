@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { AIService } from '@/lib/services/ai.service';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
 export async function POST(req: Request) {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
+    const cookieStore = cookies();
+    const supabase = createServerComponentClient({ cookies: () => cookieStore });
+    
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -18,7 +20,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // This triggers the relational scene generation we just set up
     const result = await AIService.writeScript(projectId, title, context, user.id);
 
     return NextResponse.json(result);
