@@ -6,63 +6,56 @@ export async function POST(req: Request) {
     const { prompt } = await req.json()
     const apiKey = process.env.GEMINI_API_KEY
     
-    // 1. Safety Check: Do we have a key?
+    // FALLBACK DATA (We prepare this in case anything goes wrong)
+    const fallbackData = [
+        { audio: `Here is a video about ${prompt}`, visual: "Title Card", type: "Stock Video" },
+        { audio: "The AI is warming up, but this is a placeholder scene.", visual: "Loading Animation", type: "Stock Video" },
+        { audio: "Try hitting the button again for a fresh script.", visual: "Robot Character", type: "Stock Video" }
+    ]
+
     if (!apiKey) {
-        return NextResponse.json({ 
-            data: [
-                { audio: "System Error: Missing API Key.", visual: "Error screen", type: "Stock Video" }
-            ] 
-        })
+        return NextResponse.json({ data: fallbackData })
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
-    // 2. The Request
     const aiPrompt = `
-      You are a video script generator. Output ONLY valid JSON.
+      You are a JSON generator. 
       Topic: ${prompt}
-      Format: An array of 3 scene objects.
-      Example: [{"audio": "Hook...", "visual": "Scene 1...", "type": "Stock Video"}]
-      IMPORTANT: Do not write markdown, code blocks, or explanations. Just the array.
+      Output: A strict JSON Array of 3 objects.
+      Keys: "audio", "visual", "type".
+      NO Markdown. NO code blocks.
+      Example: [{"audio":"Hi","visual":"Wave","type":"Stock Video"}]
     `
 
     const result = await model.generateContent(aiPrompt)
     const text = result.response.text()
-    console.log("AI Raw Output:", text) // Check Vercel Logs to see exactly what it said
 
-    // 3. The "Unbreakable" Parser
-    try {
-        // Attempt to clean markdown if present (```json ... ```)
-        let cleanText = text.replace(/```json/g, '').replace(/```/g, '')
-        
-        // Find the array brackets no matter where they are
-        const start = cleanText.indexOf('[')
-        const end = cleanText.lastIndexOf(']') + 1
-        
-        if (start === -1 || end === 0) throw new Error("No brackets found")
+    // AGGRESSIVE CLEANING
+    // Remove markdown, newlines, and any text before the first '['
+    let cleanText = text.replace(/```json/g, '').replace(/```/g, '')
+    const start = cleanText.indexOf('[')
+    const end = cleanText.lastIndexOf(']') + 1
 
-        const jsonString = cleanText.slice(start, end)
-        const parsedData = JSON.parse(jsonString)
-        
-        // Success! Return the AI data
-        return NextResponse.json({ data: parsedData })
-
-    } catch (parseError) {
-        console.error("Parsing Failed:", parseError)
-        
-        // 4. THE SAFETY NET (If AI fails, we send this instead of crashing)
-        return NextResponse.json({ 
-            data: [
-                { audio: "The AI created a script for " + prompt, visual: "Title card with text " + prompt, type: "Stock Video" },
-                { audio: "However, the formatting was slightly off.", visual: "Glitch effect background", type: "Stock Video" },
-                { audio: "Please try clicking 'Reroll' for a better result.", visual: "Reload icon spinning", type: "Stock Video" }
-            ] 
-        })
+    if (start !== -1 && end > start) {
+        const jsonStr = cleanText.slice(start, end)
+        const parsed = JSON.parse(jsonStr)
+        return NextResponse.json({ data: parsed })
     }
-    
-  } catch (error: any) {
-    console.error("Critical Error:", error)
-    return NextResponse.json({ error: "Server Error" }, { status: 500 })
+
+    // If we get here, parsing failed -> Return Fallback
+    console.log("Parsing failed, returning fallback.")
+    return NextResponse.json({ data: fallbackData })
+
+  } catch (error) {
+    console.error("Script Error:", error)
+    // CRITICAL: Never return an error code, always return fallback data
+    return NextResponse.json({ 
+        data: [
+            { audio: "Script generation hit a snag.", visual: "Error Glitch", type: "Stock Video" },
+            { audio: "Please try again.", visual: "Retry Icon", type: "Stock Video" }
+        ]
+    })
   }
 }
