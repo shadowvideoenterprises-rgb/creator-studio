@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server'
 import { BatchService } from '@/lib/services/batch.service'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { supabase } from '@/lib/supabaseClient'
 
 export async function POST(req: Request) {
   try {
-    const cookieStore = cookies();
-    const supabase = createServerComponentClient({ cookies: () => cookieStore });
-    
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
