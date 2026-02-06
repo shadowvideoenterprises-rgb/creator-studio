@@ -9,29 +9,44 @@ export async function POST(req: Request) {
     if (!apiKey) return NextResponse.json({ error: 'Missing API Key' }, { status: 500 })
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    // Use the FLASH model (It is 10x faster and prevents Vercel timeouts)
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
-    const result = await model.generateContent(`
-      You are a video script writer. Create a strictly valid JSON response.
+    // We construct the prompt as a simple string to avoid syntax errors
+    const aiPrompt = `
+      You are a video script generator. Output ONLY valid JSON.
       Topic: ${prompt}
       
-      Output Format: An array of 3 objects:
+      Format: An array of 3 scene objects.
+      Example:
       [
-        { "audio": "Voiceover text...", "visual": "Image description...", "type": "Stock Video" }
+        { "audio": "Hook sentence...", "visual": "Description...", "type": "Stock Video" },
+        { "audio": "Middle sentence...", "visual": "Description...", "type": "Stock Video" },
+        { "audio": "Ending sentence...", "visual": "Description...", "type": "Stock Video" }
       ]
       
-      Keep it short. Maximum 3 scenes.
-    `)
+      Do not include "json" or markdown formatting. Just the raw array.
+    `
 
-    const responseText = result.response.text()
-    // Clean up the response to ensure it's valid JSON
-    const cleanText = responseText.replace(/```json|```/g, '').trim()
+    const result = await model.generateContent(aiPrompt)
+    const text = result.response.text()
     
-    return NextResponse.json({ data: JSON.parse(cleanText) })
+    console.log("Raw AI Response:", text) 
+
+    // SMART PARSING: Find the Array manually to ignore "Here is your JSON" text
+    const start = text.indexOf('[')
+    const end = text.lastIndexOf(']') + 1
+
+    if (start === -1 || end === 0) {
+        throw new Error("AI response did not contain a valid JSON array")
+    }
+
+    const cleanJson = text.slice(start, end)
+    const parsedData = JSON.parse(cleanJson)
+
+    return NextResponse.json({ data: parsedData })
     
   } catch (error: any) {
-    console.error(error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Script Gen Error:", error)
+    return NextResponse.json({ error: error.message || 'Script generation failed' }, { status: 500 })
   }
 }
