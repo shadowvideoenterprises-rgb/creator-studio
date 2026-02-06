@@ -3,7 +3,7 @@ import { useState, useEffect, use } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useJobStatus } from '@/hooks/useJobStatus'
 import SceneEditor from '@/components/editor/SceneEditor'
-import { Sparkles, Layout, Zap, CheckCircle2, DollarSign, Download } from 'lucide-react'
+import { Sparkles, Layout, Zap, CheckCircle2, DollarSign, Download, Volume2 } from 'lucide-react'
 import { Scene } from '@/lib/types'
 
 export default function ProjectWorkspace({ params }: { params: Promise<{ id: string }> }) {
@@ -55,8 +55,6 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
     try {
       const res = await fetch(`/api/export/${projectId}`, { method: 'POST' })
       const json = await res.json()
-      
-      // Trigger File Download
       const blob = new Blob([JSON.stringify(json.data, null, 2)], { type: 'application/json' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -64,14 +62,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
       a.download = `${project.title.replace(/\s+/g, '_')}_export.json`
       document.body.appendChild(a)
       a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    } catch (e) {
-      console.error(e)
-      alert('Export failed')
-    } finally {
-      setIsExporting(false)
-    }
+    } catch (e) { alert('Export failed') } finally { setIsExporting(false) }
   }
 
   const generateScript = async () => {
@@ -89,9 +80,17 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
       body: JSON.stringify({ projectId: projectId, userId: project.user_id })
     })
     const data = await res.json()
-    if (data.success && data.jobId) {
-       setCurrentJobId(data.jobId)
-    }
+    if (data.success && data.jobId) setCurrentJobId(data.jobId)
+  }
+
+  // NEW: Audio Trigger
+  const runBatchAudio = async () => {
+    const res = await fetch('/api/generate/audio', {
+      method: 'POST',
+      body: JSON.stringify({ projectId: projectId, userId: project.user_id })
+    })
+    const data = await res.json()
+    if (data.success && data.jobId) setCurrentJobId(data.jobId)
   }
 
   return (
@@ -111,16 +110,20 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
             </p>
           </div>
           <div className="flex gap-4">
-             {/* NEW: Export Button */}
              <button onClick={handleExport} disabled={isExporting} className="px-4 py-3 bg-white/5 border border-white/10 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-white/10 transition-all">
                <Download size={18} /> {isExporting ? 'Bundling...' : 'Export JSON'}
              </button>
 
+             {/* NEW: Audio Button */}
+             <button onClick={runBatchAudio} disabled={status === 'processing' || scenes.length === 0} className="px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-bold flex items-center gap-2 hover:bg-emerald-500/20 transition-all disabled:opacity-30">
+               <Volume2 size={18} /> Generate Audio
+             </button>
+
              <button onClick={runBatchAssets} disabled={status === 'processing' || scenes.length === 0} className="px-6 py-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-500/20 transition-all disabled:opacity-30">
-              <Zap size={18} /> Auto-Generate Visuals
+              <Zap size={18} /> Visuals
             </button>
             <button onClick={generateScript} disabled={status === 'processing'} className="px-8 py-3 bg-white text-black rounded-2xl font-bold flex items-center gap-2 hover:bg-purple-400 transition-all active:scale-95 disabled:opacity-50">
-              <Sparkles size={18} /> {scenes.length > 0 ? 'Reroll Script' : 'Generate Script'}
+              <Sparkles size={18} /> {scenes.length > 0 ? 'Reroll' : 'Script'}
             </button>
           </div>
         </div>

@@ -1,111 +1,114 @@
 'use client'
 import { useState } from 'react'
+import { Scene, SceneAsset } from '@/lib/types'
 import { supabase } from '@/lib/supabaseClient'
-import { Trash2, Film, Type, Search, ImageIcon } from 'lucide-react'
-import MediaModal from '../media/MediaModal'
+import { Trash2, GripVertical, Image as ImageIcon, Video, Wand2, RefreshCw, Volume2 } from 'lucide-react'
 
-export default function SceneEditor({ scene, onUpdate, onDelete }: any) {
+interface SceneEditorProps {
+  scene: Scene
+  onUpdate: (id: string, field: string, value: string) => void
+  onDelete: () => void
+}
+
+export default function SceneEditor({ scene, onUpdate, onDelete }: SceneEditorProps) {
   const [isUpdating, setIsUpdating] = useState(false)
-  const [showMediaModal, setShowMediaModal] = useState(false)
 
-  const handleBlur = async (field: string, value: string) => {
+  // Determine the active asset
+  const activeAsset = scene.assets?.find(a => a.is_selected) || scene.assets?.[0]
+
+  const handleSelectAsset = async (asset: SceneAsset) => {
+    if (isUpdating) return
     setIsUpdating(true)
-    const { error } = await supabase
-      .from('scenes')
-      .update({ [field]: value })
-      .eq('id', scene.id)
-    
-    if (!error) onUpdate(scene.id, field, value)
+    await supabase.from('scene_assets').update({ is_selected: false }).eq('scene_id', scene.id)
+    await supabase.from('scene_assets').update({ is_selected: true }).eq('id', asset.id)
     setIsUpdating(false)
+    onDelete() 
   }
 
   return (
-    <div className="group bg-white/[0.03] border border-white/10 rounded-[2rem] p-8 transition-all hover:border-purple-500/30 shadow-2xl relative overflow-hidden">
-      {/* Background Glow for Active Assets */}
-      {scene.asset_url && (
-        <div className="absolute inset-0 opacity-5 pointer-events-none">
-           <img src={scene.asset_url} className="w-full h-full object-cover blur-3xl" alt="" />
-        </div>
-      )}
+    <div className="bg-[#121214] border border-white/5 rounded-3xl p-6 group hover:border-white/10 transition-all flex gap-8 relative overflow-hidden">
+       <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-purple-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
 
-      <div className="flex justify-between items-center mb-6 relative">
-        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
-          Scene {scene.sequence_order}
-        </span>
-        <button onClick={() => onDelete(scene.id)} className="opacity-0 group-hover:opacity-100 p-2 text-slate-600 hover:text-red-400 transition-all">
-          <Trash2 size={18} />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 relative">
-        {/* Audio/Script Side */}
-        <div className="space-y-3">
-          <label className="flex items-center gap-2 text-[10px] font-bold text-purple-400 uppercase tracking-widest ml-1">
-            <Type size={14} /> Audio Script
-          </label>
-          <textarea 
-            defaultValue={scene.audio_text}
-            onBlur={(e) => handleBlur('audio_text', e.target.value)}
-            className="w-full h-40 bg-black/40 border border-white/5 rounded-2xl p-5 text-sm leading-relaxed focus:border-purple-500/50 outline-none transition-all resize-none shadow-inner text-slate-200"
-            placeholder="What should be said in this scene?"
-          />
-        </div>
-
-        {/* Visual/Media Side */}
-        <div className="space-y-3">
-          <div className="flex justify-between items-center ml-1">
-            <label className="flex items-center gap-2 text-[10px] font-bold text-blue-400 uppercase tracking-widest">
-              <Film size={14} /> Visual Direction
-            </label>
-            <button 
-              onClick={() => setShowMediaModal(true)}
-              className="flex items-center gap-2 text-[10px] font-bold text-white/40 hover:text-blue-400 uppercase tracking-widest transition-colors"
-            >
-              <Search size={12} /> Search Media
-            </button>
-          </div>
-
-          <div className="relative group/media h-40">
-            {scene.asset_url ? (
-              <div className="relative h-full w-full rounded-2xl overflow-hidden border border-white/10 group-hover:border-blue-500/50 transition-all">
-                <img src={scene.asset_url} className="w-full h-full object-cover" alt="Selected asset" />
-                <button 
-                   onClick={() => setShowMediaModal(true)}
-                   className="absolute inset-0 bg-black/60 opacity-0 group-hover/media:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2"
-                >
-                  <ImageIcon size={24} className="text-white" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white">Change Media</span>
-                </button>
+       {/* Left: Scripting Controls */}
+       <div className="flex-1 space-y-6">
+          <div className="flex items-center gap-4 mb-2">
+            <div className="cursor-move text-white/20 hover:text-white transition">
+              <GripVertical size={20} />
+            </div>
+            <span className="font-mono text-xs text-purple-400 font-bold uppercase tracking-widest bg-purple-500/10 px-2 py-1 rounded">Scene {scene.sequence_order}</span>
+            
+            {/* NEW: Audio Player Indicator */}
+            {scene.audio_url && (
+              <div className="flex items-center gap-2 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                <Volume2 size={12} className="text-emerald-500" />
+                <span className="text-[10px] text-emerald-500 font-bold uppercase">Voice Ready</span>
               </div>
-            ) : (
-              <button 
-                onClick={() => setShowMediaModal(true)}
-                className="w-full h-full bg-black/40 border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-blue-500/20 hover:bg-blue-500/[0.02] transition-all group"
-              >
-                <div className="p-3 bg-white/5 rounded-xl group-hover:bg-blue-500/20 transition-colors">
-                  <Search size={20} className="text-slate-500 group-hover:text-blue-400" />
-                </div>
-                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Add Visual Asset</span>
-              </button>
             )}
           </div>
-        </div>
-      </div>
-      
-      {isUpdating && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full">
-           <div className="w-1 h-1 bg-purple-400 rounded-full animate-pulse" />
-           <span className="text-[8px] font-bold text-purple-400 uppercase tracking-widest">Syncing to Cloud</span>
-        </div>
-      )}
 
-      {showMediaModal && (
-        <MediaModal 
-          sceneId={scene.id} 
-          onClose={() => setShowMediaModal(false)}
-          onSelect={(id: string, url: string) => onUpdate(id, 'asset_url', url)}
-        />
-      )}
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Narration (Voiceover)</label>
+            <textarea 
+              value={scene.audio_text} 
+              onChange={(e) => onUpdate(scene.id, 'audio_text', e.target.value)}
+              className="w-full bg-black/40 border border-white/5 rounded-xl p-4 text-slate-300 text-sm leading-relaxed outline-none focus:border-purple-500/50 focus:bg-black/60 transition resize-none h-24"
+              placeholder="Enter the voiceover script here..."
+            />
+            {/* NEW: Actual Audio Player */}
+            {scene.audio_url && (
+               <audio controls className="w-full h-8 mt-2 opacity-60 hover:opacity-100 transition-opacity" src={scene.audio_url} />
+            )}
+          </div>
+
+          <div className="space-y-2">
+             <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Visual Direction</label>
+             <div className="relative">
+                <Wand2 size={14} className="absolute top-4 left-4 text-purple-400" />
+                <textarea 
+                  value={scene.visual_description} 
+                  onChange={(e) => onUpdate(scene.id, 'visual_description', e.target.value)}
+                  className="w-full bg-black/40 border border-white/5 rounded-xl p-4 pl-12 text-slate-400 text-sm leading-relaxed outline-none focus:border-indigo-500/50 focus:bg-black/60 transition resize-none h-20 font-mono"
+                />
+             </div>
+          </div>
+       </div>
+
+       {/* Right: Asset Selector */}
+       <div className="w-[400px] flex flex-col gap-4">
+          <div className="aspect-video bg-black rounded-2xl border border-white/5 relative overflow-hidden group/preview shadow-2xl">
+            {activeAsset ? (
+               activeAsset.type === 'stock' && activeAsset.url.endsWith('.mp4') ? (
+                 <video src={activeAsset.url} className="w-full h-full object-cover" autoPlay loop muted playsInline />
+               ) : (
+                 <img src={activeAsset.url} className="w-full h-full object-cover" alt="Scene Asset" />
+               )
+            ) : (
+               <div className="w-full h-full flex flex-col items-center justify-center text-white/20 gap-3">
+                  <ImageIcon size={32} />
+                  <span className="text-xs uppercase tracking-widest">No Asset Generated</span>
+               </div>
+            )}
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+             {scene.assets?.map((asset) => (
+               <button 
+                 key={asset.id}
+                 onClick={() => handleSelectAsset(asset)}
+                 className={`aspect-video rounded-lg overflow-hidden border-2 relative transition-all active:scale-95 ${
+                    asset.is_selected ? 'border-purple-500 ring-2 ring-purple-500/20' : 'border-transparent hover:border-white/20 opacity-60 hover:opacity-100'
+                 }`}
+               >
+                 <img src={activeAsset?.url === asset.url ? asset.url : asset.url} className="w-full h-full object-cover" />
+               </button>
+             ))}
+          </div>
+       </div>
+
+       <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
+         <button onClick={onDelete} className="p-2 text-red-500/50 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition">
+           <Trash2 size={18} />
+         </button>
+       </div>
     </div>
   )
 }
