@@ -9,9 +9,9 @@ export async function POST(req: Request) {
     if (!apiKey) return NextResponse.json({ error: 'Missing API Key' }, { status: 500 })
 
     const genAI = new GoogleGenerativeAI(apiKey)
+    // Use the FLASH model for speed
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
-    // We construct the prompt as a simple string to avoid syntax errors
     const aiPrompt = `
       You are a video script generator. Output ONLY valid JSON.
       Topic: ${prompt}
@@ -32,21 +32,25 @@ export async function POST(req: Request) {
     
     console.log("Raw AI Response:", text) 
 
-    // SMART PARSING: Find the Array manually to ignore "Here is your JSON" text
+    // --- SMART PARSING FIX ---
+    // Find the first '[' and the last ']' to extract only the JSON array.
     const start = text.indexOf('[')
     const end = text.lastIndexOf(']') + 1
 
     if (start === -1 || end === 0) {
+        // If we can't find brackets, the AI failed to follow instructions.
         throw new Error("AI response did not contain a valid JSON array")
     }
 
     const cleanJson = text.slice(start, end)
     const parsedData = JSON.parse(cleanJson)
+    // -------------------------
 
     return NextResponse.json({ data: parsedData })
     
   } catch (error: any) {
     console.error("Script Gen Error:", error)
+    // Send a clear error message back to the frontend
     return NextResponse.json({ error: error.message || 'Script generation failed' }, { status: 500 })
   }
 }
