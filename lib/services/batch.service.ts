@@ -35,7 +35,6 @@ export class BatchService {
           await JobService.updateProgress(jobId, progress, `Processing scene ${i + 1} of ${total}...`);
 
           // Decision Logic: Video or Image? 
-          // (Simple heuristic: odd scenes = video, even = image for demo)
           let assetData;
           if (i % 2 === 0) {
              assetData = await MediaService.searchStockVideo(scene.visual_description);
@@ -43,16 +42,20 @@ export class BatchService {
              assetData = await MediaService.generateAIImage(scene.visual_description);
           }
 
+          // FIX: Cast to 'any' so we can access optional fields (external_id / prompt)
+          // without TypeScript complaining about Union types.
+          const safeData = assetData as any;
+
           // 4. Save using the relational AssetService
           await AssetService.saveAssetOption(scene.id, {
-            type: assetData.type as any,
-            source: assetData.source as any,
-            url: assetData.url,
-            external_id: assetData.external_id,
-            prompt: assetData.prompt
+            type: safeData.type,
+            source: safeData.source,
+            url: safeData.url,
+            external_id: safeData.external_id, // Safe to access now (undefined if missing)
+            prompt: safeData.prompt           // Safe to access now
           });
 
-          // Optional: Artificial delay to simulate API latency and test the progress bar
+          // Optional: Artificial delay
           await new Promise(r => setTimeout(r, 800));
         }
 

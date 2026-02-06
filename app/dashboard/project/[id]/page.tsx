@@ -3,7 +3,7 @@ import { useState, useEffect, use } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useJobStatus } from '@/hooks/useJobStatus'
 import SceneEditor from '@/components/editor/SceneEditor'
-import { Sparkles, Layout, Zap, CheckCircle2, DollarSign } from 'lucide-react'
+import { Sparkles, Layout, Zap, CheckCircle2, DollarSign, Download } from 'lucide-react'
 import { Scene } from '@/lib/types'
 
 export default function ProjectWorkspace({ params }: { params: Promise<{ id: string }> }) {
@@ -14,6 +14,7 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
   const [scenes, setScenes] = useState<Scene[]>([])
   const [estimate, setEstimate] = useState<number>(0)
   const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
   const { progress, message, status } = useJobStatus(currentJobId)
 
   useEffect(() => {
@@ -33,7 +34,6 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
 
   const fetchProjectData = async () => {
     const { data: proj } = await supabase.from('projects').select('*').eq('id', projectId).single()
-    // KEY UPDATE: We now fetch scene_assets with the scenes
     const { data: scns } = await supabase
       .from('scenes')
       .select('*, scene_assets(*)')
@@ -48,6 +48,30 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
     const res = await fetch(`/api/analytics/cost?projectId=${projectId}`)
     const data = await res.json()
     setEstimate(data.estimate)
+  }
+
+  const handleExport = async () => {
+    setIsExporting(true)
+    try {
+      const res = await fetch(`/api/export/${projectId}`, { method: 'POST' })
+      const json = await res.json()
+      
+      // Trigger File Download
+      const blob = new Blob([JSON.stringify(json.data, null, 2)], { type: 'application/json' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${project.title.replace(/\s+/g, '_')}_export.json`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (e) {
+      console.error(e)
+      alert('Export failed')
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const generateScript = async () => {
@@ -87,6 +111,11 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
             </p>
           </div>
           <div className="flex gap-4">
+             {/* NEW: Export Button */}
+             <button onClick={handleExport} disabled={isExporting} className="px-4 py-3 bg-white/5 border border-white/10 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-white/10 transition-all">
+               <Download size={18} /> {isExporting ? 'Bundling...' : 'Export JSON'}
+             </button>
+
              <button onClick={runBatchAssets} disabled={status === 'processing' || scenes.length === 0} className="px-6 py-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-500/20 transition-all disabled:opacity-30">
               <Zap size={18} /> Auto-Generate Visuals
             </button>
@@ -119,7 +148,6 @@ export default function ProjectWorkspace({ params }: { params: Promise<{ id: str
               onUpdate={(id: string, field: string, val: string) => { 
                 setScenes(scenes.map(s => s.id === id ? { ...s, [field]: val } : s)) 
               }} 
-              // We reuse the fetch function to refresh assets when one is selected
               onDelete={fetchProjectData} 
             />
           ))}
