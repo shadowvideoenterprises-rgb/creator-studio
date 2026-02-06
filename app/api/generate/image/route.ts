@@ -1,43 +1,47 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(req: Request) {
   try {
     const { prompt } = await req.json()
     const apiKey = process.env.GEMINI_API_KEY
-    
-    if (!apiKey) {
-        return NextResponse.json({ error: 'Missing Gemini API Key' }, { status: 500 })
+
+    if (!apiKey) return NextResponse.json({ error: 'Missing Gemini API Key' }, { status: 500 })
+
+    // DIRECT API CALL (Bypasses the library version issues)
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instances: [{ prompt: `Cinematic, photorealistic, 8k: ${prompt}` }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: "16:9",
+            outputMimeType: "image/jpeg"
+          }
+        })
+      }
+    )
+
+    if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Google API Error: ${errorText}`)
     }
 
-    // Initialize Gemini
-    const genAI = new GoogleGenerativeAI(apiKey)
+    const data = await response.json()
     
-    // Use the Imagen model
-    const model = genAI.getGenerativeModel({ model: "imagen-3.0-generate-001" })
-
-    // FIX: We cast 'model' to 'any' to fix the TypeScript build error
-    const result = await (model as any).generateImages({
-      prompt: `Cinematic, photorealistic, high quality, 8k: ${prompt}`,
-      numberOfImages: 1,
-      aspectRatio: "16:9", 
-      outputMimeType: "image/jpeg",
-    })
-
-    const response = result.response
-    const images = response.images
-    
-    if (!images || images.length === 0) {
-        throw new Error("No image returned")
+    // Check if image exists in the response
+    if (!data.predictions?.[0]?.bytesBase64Encoded) {
+        throw new Error("No image data returned from Google")
     }
 
-    // Convert the raw data to a Base64 string
-    const base64Image = `data:image/jpeg;base64,${images[0].encoding}`
+    const base64Image = `data:image/jpeg;base64,${data.predictions[0].bytesBase64Encoded}`
 
     return NextResponse.json({ url: base64Image, isBase64: true })
-    
+
   } catch (error: any) {
-    console.error('Gemini Image Error:', error)
+    console.error('Image Gen Error:', error)
     return NextResponse.json({ error: error.message || 'Generation failed' }, { status: 500 })
   }
 }
