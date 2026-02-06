@@ -26,22 +26,43 @@ export default function IdeationPage() {
 
   const convertToProject = async (idea: any) => {
     try {
-        // 1. Create the project
+        console.log("1. Authenticating...");
+        
+        // 1. GET THE USER (Crucial Fix)
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+            alert("Please log in to create a project.");
+            return;
+        }
+
+        console.log("User found:", user.id);
+        console.log("2. Creating project...", idea.title);
+
+        // 2. Create the project with USER_ID attached
         const { data, error } = await supabase.from('projects').insert({
             title: idea.title,
-            // We initialize with the hook as the first scene
-            content: JSON.stringify([{ audio: idea.hook, visual: "Intro Hook", type: "Stock Video" }]), 
-            status: 'draft'
+            user_id: user.id, // <--- This solves the "null value" error
+            content: JSON.stringify([{ audio: idea.hook, visual: "Intro Hook", type: "Stock Video" }]),
+            status: 'draft',
+            settings: { pacing: 'fast' }
         }).select().single()
 
-        if (error) throw error
+        // 3. Check for DB Errors
+        if (error) {
+            console.error("Supabase Insert Error:", error);
+            throw error;
+        }
 
-        // 2. Redirect on success
-        if (data) router.push(`/dashboard/project/${data.id}`)
+        // 4. Redirect on success
+        if (data) {
+            console.log("Project created! ID:", data.id);
+            router.push(`/dashboard/project/${data.id}`)
+        }
         
     } catch (err: any) {
-        alert("Error creating project: " + err.message)
-        console.error(err)
+        alert("Database Error: " + err.message)
+        console.error("Full Error:", err)
     }
   }
 
