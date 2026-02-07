@@ -2,8 +2,9 @@
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { VersionService } from '@/lib/services/versionService'
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  // Get list of versions
+// FIX: Removed "{ params }" because this is a static route, not a dynamic [id] route.
+export async function GET(req: Request) {
+  // Get list of versions via Query Params instead
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get('projectId');
   
