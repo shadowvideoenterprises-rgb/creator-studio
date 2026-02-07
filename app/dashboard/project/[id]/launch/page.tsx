@@ -1,50 +1,103 @@
 ﻿'use client'
-import { useState, use } from 'react'
-import { Rocket, Youtube, Instagram, Twitter, Download, Copy, Check } from 'lucide-react'
+import { useState, useEffect, use } from 'react'
+import { Rocket, Youtube, Instagram, Download, Copy, Check, Sparkles, Loader2, RefreshCw } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
+import { useToast } from '@/components/ToastProvider'
 
 export default function LaunchPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const projectId = resolvedParams.id
+  const { toast } = useToast()
   
   const [activeTab, setActiveTab] = useState('youtube')
   const [copied, setCopied] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [project, setProject] = useState<any>(null)
+  
+  // Real Data State
+  const [metadata, setMetadata] = useState({
+    title: '',
+    description: '',
+    tags: [] as string[]
+  })
 
-  // Mock Marketing Data (This would come from your Marketing AI Service)
-  const marketing = {
-    youtube: {
-      title: "The Secret Truth About Pyramids (You Won't Believe This)",
-      description: "Stop scrolling. Everything you know about Ancient Egypt is wrong. In this video, we uncover the hidden engineering...",
-      tags: "#History #AncientEgypt #Engineering #Mystery #Documentary"
-    },
-    shorts: {
-      title: "Pyramids were POWER PLANTS?? ⚡️ #Shorts",
-      description: "Did the ancients have electricity? The answer might shock you. Link in bio.",
-      tags: "#Shorts #HistoryFacts #Conspiracy"
+  useEffect(() => { fetchProject() }, [])
+
+  const fetchProject = async () => {
+    const { data } = await supabase.from('projects').select('*').eq('id', projectId).single()
+    if (data) {
+        setProject(data)
+        // Load existing data or fallbacks
+        setMetadata({
+            title: data.title || '',
+            description: data.description || '',
+            tags: data.tags || [] // Ensure your DB has a tags column or use a JSON field
+        })
+    }
+    setLoading(false)
+  }
+
+  const handleGenerate = async () => {
+    setGenerating(true)
+    toast("AI Growth Expert is analyzing your script...", "loading", 4000)
+    
+    try {
+        const res = await fetch('/api/generate/marketing', {
+            method: 'POST',
+            body: JSON.stringify({ projectId })
+        })
+        const json = await res.json()
+        
+        if (json.success) {
+            setMetadata({
+                title: json.data.title,
+                description: json.data.description,
+                tags: json.data.tags
+            })
+            toast("Viral Metadata Generated!", "success")
+            fetchProject() // Refresh to sync
+        } else {
+            toast(json.error || "Generation Failed", "error")
+        }
+    } catch (e) {
+        toast("Network Error", "error")
+    } finally {
+        setGenerating(false)
     }
   }
 
-  const currentData = activeTab === 'youtube' ? marketing.youtube : marketing.shorts
-
   const handleCopy = () => {
-    navigator.clipboard.writeText(`${currentData.title}\n\n${currentData.description}\n\n${currentData.tags}`)
+    const text = `${metadata.title}\n\n${metadata.description}\n\nTags: ${metadata.tags.join(', ')}`
+    navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+    toast("Copied to clipboard", "success")
   }
 
   const handleExport = async () => {
-    const res = await fetch(`/api/export/${projectId}`, { method: 'POST' })
-    const json = await res.json()
-    const blob = new Blob([JSON.stringify(json.data, null, 2)], { type: 'application/json' })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `project_${projectId}_export.json`
-    document.body.appendChild(a)
-    a.click()
+    toast("Packaging project...", "loading")
+    try {
+        const res = await fetch(`/api/export?projectId=${projectId}`) // Using the GET route from snapshot
+        if (!res.ok) throw new Error("Export failed")
+        
+        const blob = await res.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${metadata.title.slice(0, 20).replace(/\s+/g, '_')}_Bible.md` // Downloading the Bible for now
+        document.body.appendChild(a)
+        a.click()
+        toast("Download Started", "success")
+    } catch (e) {
+        toast("Export failed", "error")
+    }
   }
 
+  if (loading) return <div className="p-20 text-center text-slate-500">Loading Launchpad...</div>
+
   return (
-    <div className="p-8 min-h-screen max-w-6xl mx-auto">
+    <div className="p-8 min-h-screen max-w-6xl mx-auto animate-in fade-in">
       
       <div className="mb-12 text-center space-y-4">
         <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl mx-auto flex items-center justify-center shadow-2xl shadow-purple-500/20">
@@ -56,7 +109,7 @@ export default function LaunchPage({ params }: { params: Promise<{ id: string }>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left: Platform Selector */}
+        {/* Left: Platform Selector & Actions */}
         <div className="lg:col-span-1 space-y-3">
            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest px-2 mb-2">Select Platform</p>
            
@@ -76,19 +129,28 @@ export default function LaunchPage({ params }: { params: Promise<{ id: string }>
              <span className="font-bold">Shorts / Reels</span>
            </button>
            
-           <div className="pt-8">
+           <div className="pt-8 space-y-3">
+             <button 
+               onClick={handleGenerate}
+               disabled={generating}
+               className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 disabled:opacity-50"
+             >
+               {generating ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+               <span>{generating ? 'Analyzing...' : 'Auto-Generate Metadata'}</span>
+             </button>
+
              <button 
                onClick={handleExport}
-               className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-purple-200 transition-all flex items-center justify-center gap-2"
+               className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
              >
                <Download size={18} />
-               <span>Download Project JSON</span>
+               <span>Download Package</span>
              </button>
            </div>
         </div>
 
         {/* Right: Metadata Editor */}
-        <div className="lg:col-span-2 bg-[#121214] border border-white/5 rounded-3xl p-8 relative">
+        <div className="lg:col-span-2 bg-[#121214] border border-white/5 rounded-3xl p-8 relative group">
            
            <div className="absolute top-6 right-6">
               <button 
@@ -103,29 +165,42 @@ export default function LaunchPage({ params }: { params: Promise<{ id: string }>
            <div className="space-y-6">
               <div className="space-y-2">
                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Video Title</label>
-                 <input 
-                   type="text" 
-                   defaultValue={currentData?.title}
-                   className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white font-bold text-lg focus:outline-none focus:border-purple-500/50"
-                 />
+                 <div className="relative">
+                    <input 
+                       type="text" 
+                       value={metadata.title}
+                       onChange={(e) => setMetadata({...metadata, title: e.target.value})}
+                       className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white font-bold text-lg focus:outline-none focus:border-indigo-500/50 pr-12"
+                       placeholder="Click Auto-Generate..."
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-600">
+                        {metadata.title.length}/60
+                    </div>
+                 </div>
               </div>
 
               <div className="space-y-2">
                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Description</label>
                  <textarea 
-                   defaultValue={currentData?.description}
-                   className="w-full h-40 bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-slate-300 leading-relaxed focus:outline-none focus:border-purple-500/50 resize-none"
+                   value={metadata.description}
+                   onChange={(e) => setMetadata({...metadata, description: e.target.value})}
+                   className="w-full h-40 bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-slate-300 leading-relaxed focus:outline-none focus:border-indigo-500/50 resize-none font-mono text-sm"
+                   placeholder="AI will generate a viral description here..."
                  />
               </div>
 
               <div className="space-y-2">
                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tags</label>
                  <div className="flex flex-wrap gap-2">
-                    {currentData?.tags.split(' ').map((tag, i) => (
-                      <span key={i} className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-lg text-sm font-medium">
-                        {tag}
-                      </span>
-                    ))}
+                     {metadata.tags.length > 0 ? (
+                        metadata.tags.map((tag, i) => (
+                          <span key={i} className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-lg text-sm font-medium">
+                            #{tag}
+                          </span>
+                        ))
+                     ) : (
+                        <span className="text-slate-600 text-sm italic">No tags generated yet.</span>
+                     )}
                  </div>
               </div>
            </div>
