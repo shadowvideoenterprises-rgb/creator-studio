@@ -1,109 +1,73 @@
 ﻿import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import OpenAI from 'openai'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 
 export async function POST(req: Request) {
   try {
-    const { projectId, title, model, tone = 'Engaging' } = await req.json()
+    const { projectId, title, model } = await req.json() // 'model' might be passed from UI, or we auto-select
 
-    if (!projectId) return NextResponse.json({ error: 'No Project ID' }, { status: 400 })
-
-    // 1. Get Project & Keys
+    // 1. Get Project & User Settings
     const { data: project } = await supabaseAdmin.from('projects').select('*').eq('id', projectId).single()
-    const { data: settings } = await supabaseAdmin.from('user_settings').select('api_keys').eq('user_id', project.user_id).single()
+    const { data: settings } = await supabaseAdmin.from('user_settings').select('*').eq('user_id', project.user_id).single()
+    
     const keys = settings?.api_keys || {}
+    const availableModels = settings?.available_models?.google || []
 
-    // 2. FETCH KNOWLEDGE (New Step)
-    // We grab the user's research notes to ground the script in facts
-    const { data: knowledgeData } = await supabaseAdmin
-        .from('project_knowledge')
-        .select('content')
-        .eq('project_id', projectId)
+    // 2. SMART MODEL SELECTION
+    // If the UI didn't enforce a model, or if the enforced model isn't in our discovered list,
+    // we pick the "best" available text model automatically.
+    let targetModelId = model
     
-    const researchContext = knowledgeData?.map(k => `- ${k.content}`).join('\n') || "No specific research provided."
+    // Check if the requested model actually exists in our discovery cache
+    const modelExists = availableModels.find((m: any) => m.id === model || m.name === model)
 
-    // 3. Construct the "Director's Prompt"
-    const SYSTEM_PROMPT = `
-    You are an expert YouTube Scriptwriter.
-    Title: "${title}"
-    Tone: "${tone}" (Strictly adhere to this style)
-    
-    CORE CONCEPT:
-    ${project.description}
+    if (!modelExists) {
+        console.warn(`Requested model ${model} not found in discovery. Auto-selecting best option...`)
+        // Filter for text models and sort by capability (simple heuristic: 'pro' > 'flash')
+        const bestModel = availableModels
+            .filter((m: any) => m.type === 'text')
+            .sort((a: any, b: any) => b.id.length - a.id.length)[0] // Rudimentary sort, can be improved
 
-    RESEARCH / KEY FACTS TO INCLUDE:
-    ${researchContext}
-
-    RULES:
-    1. Divide the script into SCENES.
-    2. Scene 1 (Hook) must be under 10 seconds and grab attention immediately.
-    3. Use the provided Research facts to make the script unique.
-    4. Provide VISUAL descriptions for an AI image generator (detailed, atmospheric).
-    5. Provide AUDIO text for the voiceover (conversational, spoken-word style).
-    
-    OUTPUT FORMAT (Raw JSON only):
-    {
-      "scenes": [
-        { 
-          "visual_description": "Cinematic shot of...", 
-          "audio_text": "Did you know that in Ancient Rome..." 
-        }
-      ]
+        targetModelId = bestModel ? bestModel.id : 'gemini-2.0-flash' // Fallback to safe default
     }
+
+    console.log(`Generating script using: ${targetModelId}`)
+
+    // 3. Generate (Standard Logic)
+    const genAI = new GoogleGenerativeAI(keys.google)
+    const aiModel = genAI.getGenerativeModel({ 
+        model: targetModelId,
+        generationConfig: { responseMimeType: "application/json" } 
+    })
+
+    const prompt = `
+      You are a YouTube Scriptwriter.
+      Title: "${title}"
+      Context: "${project.description}"
+      
+      Output a JSON object with a "scenes" array. 
+      Each scene needs: "visual_description", "audio_text".
+      Keep audio under 20 words per scene.
     `
 
-    let scenes = []
+    const result = await aiModel.generateContent(prompt)
+    const responseText = result.response.text()
+    const scenes = JSON.parse(responseText).scenes || []
 
-    // --- GOOGLE GEMINI ---
-    if (model.includes('gemini') || model.includes('banana')) {
-        if (!keys.google) throw new Error("No Google Key found")
-        const genAI = new GoogleGenerativeAI(keys.google)
-        const modelId = model.startsWith('models/') ? model : `models/${model}`
-        
-        const aiModel = genAI.getGenerativeModel({ 
-            model: modelId,
-            generationConfig: { responseMimeType: "application/json" } 
-        })
+    // 4. Save
+    await supabaseAdmin.from('scenes').delete().eq('project_id', projectId)
+    const rows = scenes.map((s: any, index: number) => ({
+        project_id: projectId,
+        sequence_order: index + 1,
+        visual_description: s.visual_description,
+        audio_text: s.audio_text
+    }))
+    await supabaseAdmin.from('scenes').insert(rows)
 
-        const result = await aiModel.generateContent(SYSTEM_PROMPT)
-        const text = result.response.text()
-        scenes = JSON.parse(text).scenes || []
-    } 
-    
-    // --- OPENAI ---
-    else if (model.includes('gpt')) {
-        if (!keys.openai) throw new Error("No OpenAI Key found")
-        const openai = new OpenAI({ apiKey: keys.openai })
-        
-        const completion = await openai.chat.completions.create({
-            model: model,
-            messages: [
-                { role: "system", content: "You are a JSON script generator." },
-                { role: "user", content: SYSTEM_PROMPT }
-            ],
-            response_format: { type: "json_object" }
-        })
-        
-        scenes = JSON.parse(completion.choices[0].message.content || "{}").scenes || []
-    }
-
-    // 4. Save to DB
-    if (scenes.length > 0) {
-        await supabaseAdmin.from('scenes').delete().eq('project_id', projectId)
-        const rows = scenes.map((s: any, index: number) => ({
-            project_id: projectId,
-            sequence_order: index + 1,
-            visual_description: s.visual_description,
-            audio_text: s.audio_text
-        }))
-        await supabaseAdmin.from('scenes').insert(rows)
-    }
-
-    return NextResponse.json({ success: true, count: scenes.length })
+    return NextResponse.json({ success: true, count: scenes.length, modelUsed: targetModelId })
 
   } catch (error: any) {
-    console.error("Script Error:", error)
+    console.error("Script Gen Error:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
