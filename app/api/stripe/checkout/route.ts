@@ -2,20 +2,17 @@
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import Stripe from 'stripe'
 
-// Initialize Stripe (Make sure to add STRIPE_SECRET_KEY to .env.local later)
+// FIX: Cast apiVersion to 'any' to prevent TypeScript errors on future SDK versions
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
-  apiVersion: '2023-10-16',
+  apiVersion: '2026-01-28.clover' as any, 
 })
 
 export async function POST(req: Request) {
   try {
     const { userId, plan = 'credits_500' } = await req.json()
 
-    // 1. Validate User
     if (!userId) return NextResponse.json({ error: 'No User ID' }, { status: 400 })
     
-    // 2. Define Price (In a real app, use Price IDs from Stripe Dashboard)
-    // For this demo, we create ad-hoc prices
     const lineItems = [{
         price_data: {
             currency: 'usd',
@@ -23,12 +20,11 @@ export async function POST(req: Request) {
                 name: '500 Creator Credits',
                 description: 'Generate ~50 Scripts or 25 Images',
             },
-            unit_amount: 1000, // $10.00
+            unit_amount: 1000, 
         },
         quantity: 1,
     }]
 
-    // 3. Create Session
     const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: lineItems,
@@ -36,7 +32,7 @@ export async function POST(req: Request) {
         success_url: `${req.headers.get('origin')}/dashboard?payment=success`,
         cancel_url: `${req.headers.get('origin')}/dashboard?payment=cancelled`,
         metadata: {
-            userId: userId, // CRITICAL: We need this to know who to credit later
+            userId: userId,
             type: 'credit_refill',
             amount: 500
         }

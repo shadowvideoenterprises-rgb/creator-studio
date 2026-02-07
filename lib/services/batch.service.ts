@@ -1,5 +1,5 @@
-import { supabaseAdmin } from '@/lib/supabaseServer'
-import { JobService } from '@/lib/services/job.service'
+﻿import { supabaseAdmin } from '@/lib/supabaseServer'
+import * as JobService from '@/lib/services/jobService'
 import { AssetService } from '@/lib/services/asset.service'
 import { MediaService } from '@/lib/services/media.service'
 import { AudioService } from '@/lib/services/audio.service'
@@ -93,3 +93,4 @@ export class BatchService {
     return jobId;
   }
 }
+

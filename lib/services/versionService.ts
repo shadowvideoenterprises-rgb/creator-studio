@@ -1,79 +1,91 @@
-﻿import { supabaseAdmin } from '@/lib/supabaseServer';
+﻿import { supabaseAdmin } from '@/lib/supabaseServer'
 
 export class VersionService {
   
-  static async createSnapshot(projectId: string, userId: string, label: string = 'Auto-Save') {
+  // 1. Auto-Save (Internal)
+  static async saveVersion(projectId: string, scenes: any[], metadata: any = {}) {
     try {
-        // 1. Fetch current state
-        const { data: project } = await supabaseAdmin.from('projects').select('*').eq('id', projectId).single();
-        const { data: scenes } = await supabaseAdmin.from('scenes').select('*').eq('project_id', projectId).order('sequence_order');
-        
-        // 2. Pack data
-        const snapshotData = {
-            project: project,
-            scenes: scenes,
-            timestamp: new Date().toISOString()
-        };
+        const { data: latest } = await supabaseAdmin
+            .from('script_versions')
+            .select('version_number')
+            .eq('project_id', projectId)
+            .order('version_number', { ascending: false })
+            .limit(1)
+            .single();
+            
+        const nextVersion = (latest?.version_number || 0) + 1;
 
-        // 3. Save to 'project_versions' table
-        /*
-          Needs Table: 
-          create table project_versions (
-            id uuid default uuid_generate_v4() primary key,
-            project_id uuid references projects,
-            label text,
-            data jsonb,
-            created_at timestamp default now()
-          );
-        */
-        const { error } = await supabaseAdmin.from('project_versions').insert({
+        await supabaseAdmin.from('script_versions').insert({
             project_id: projectId,
-            label: label,
-            data: snapshotData
+            version_number: nextVersion,
+            scenes: scenes,
+            metadata: metadata
         });
 
-        if (error) console.error("Snapshot failed:", error.message);
-        return !error;
+        return nextVersion;
+    } catch (error) {
+        console.error("Version Save Failed:", error);
+        return 0;
+    }
+  }
 
+  // 2. Manual Save (API)
+  static async createSnapshot(projectId: string, userId: string, label: string) {
+    try {
+        const { data: scenes } = await supabaseAdmin.from('scenes').select('*').eq('project_id', projectId).order('sequence_order');
+        if (!scenes || scenes.length === 0) return false;
+
+        await this.saveVersion(projectId, scenes, { label, manual: true, saved_by: userId });
+        return true;
     } catch (e) {
-        console.error("VersionService Error", e);
         return false;
     }
   }
 
+  // 3. Restore by Number (Internal)
+  static async restoreVersion(projectId: string, versionNumber: number) {
+      const { data: version } = await supabaseAdmin
+        .from('script_versions')
+        .select('scenes')
+        .eq('project_id', projectId)
+        .eq('version_number', versionNumber)
+        .single();
+      
+      if (!version) throw new Error("Version not found");
+      return this._performRestore(projectId, version.scenes);
+  }
+
+  // 4. Restore by ID (API) - THIS WAS MISSING
   static async restoreSnapshot(versionId: string) {
-    try {
-        // 1. Get Snapshot
-        const { data: version } = await supabaseAdmin.from('project_versions').select('*').eq('id', versionId).single();
-        if (!version) throw new Error("Version not found");
-
-        const { project, scenes } = version.data;
-
-        // 2. Restore Project Level Data
-        await supabaseAdmin.from('projects').update({
-            title: project.title,
-            description: project.description,
-            thumbnail_url: project.thumbnail_url,
-            outline: project.outline
-        }).eq('id', version.project_id);
-
-        // 3. Restore Scenes (Delete current, Insert old)
-        // Note: This is a "Hard Restore". Be careful.
-        await supabaseAdmin.from('scenes').delete().eq('project_id', version.project_id);
+      try {
+        const { data: version } = await supabaseAdmin
+            .from('script_versions')
+            .select('project_id, scenes')
+            .eq('id', versionId)
+            .single();
         
-        // Clean scene IDs to ensure new inserts don't conflict (or keep them if you want strict restoration)
-        const cleanScenes = scenes.map((s: any) => {
-            const { id, created_at, ...rest } = s; 
-            return { ...rest, project_id: version.project_id };
-        });
+        if (!version) return false;
 
-        await supabaseAdmin.from('scenes').insert(cleanScenes);
-        
+        await this._performRestore(version.project_id, version.scenes);
         return true;
-
-    } catch (e) {
-        console.error("Restore failed", e);
+      } catch (e) {
+        console.error("Restore Failed", e);
         return false;
-    }
+      }
+  }
+
+  // Helper
+  private static async _performRestore(projectId: string, scenes: any[]) {
+      await supabaseAdmin.from('scenes').delete().eq('project_id', projectId);
+      
+      const restoredScenes = scenes.map((s: any) => {
+          const { id, ...rest } = s; 
+          return { ...rest, project_id: projectId }; 
+      });
+
+      if (restoredScenes.length > 0) {
+        await supabaseAdmin.from('scenes').insert(restoredScenes);
+      }
+      return restoredScenes;
   }
 }

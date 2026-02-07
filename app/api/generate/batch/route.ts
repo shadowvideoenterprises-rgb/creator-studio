@@ -1,53 +1,36 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-import { JobService } from '@/lib/services/job.service'
-import { AssetService } from '@/lib/services/asset.service'
+import { BatchService } from '@/lib/services/batchService'
+
+// Note: Batch route was using JobService in older versions, 
+// but based on Phase 9 code, it actually calls BatchService.
+// If it DOES use JobService, we fix the import here.
+// For safety, we keep it clean.
 
 export async function POST(req: Request) {
   try {
-    // Read parameters
-    const { projectId, userId, keys, model } = await req.json();
+    const { action, projectId, payload } = await req.json()
 
-    if (!projectId || !userId) {
-      return NextResponse.json({ error: 'Missing data' }, { status: 400 });
+    const { data: project } = await supabaseAdmin.from('projects').select('user_id').eq('id', projectId).single()
+    if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+
+    const { data: settings } = await supabaseAdmin.from('user_settings').select('api_keys').eq('user_id', project.user_id).single()
+    const keys = settings?.api_keys || {}
+
+    if (action === 'update_style') {
+        if (!keys.google) return NextResponse.json({ error: 'No Google Key' }, { status: 400 })
+        await BatchService.updateVisuals(projectId, payload.style, keys.google)
+        return NextResponse.json({ success: true, message: "Styles updated." })
     }
 
-    // 1. Get all scenes for project
-    const { data: scenes } = await supabaseAdmin
-      .from('scenes')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('sequence_order', { ascending: true });
-
-    if (!scenes || scenes.length === 0) {
-      return NextResponse.json({ error: 'No scenes found' }, { status: 404 });
+    if (action === 'swap_voice') {
+        await BatchService.updateAudio(projectId, project.user_id, payload.voiceId)
+        return NextResponse.json({ success: true, message: "Voice updated." })
     }
 
-    // 2. Create Job (FIXED TYPO: 'asset_batch')
-    const jobId = await JobService.createJob(userId, 'asset_batch');
-
-    // 3. Start Async Processing
-    (async () => {
-        try {
-            let completed = 0;
-            for (const scene of scenes) {
-                const percent = Math.round((completed / scenes.length) * 100);
-                await JobService.updateProgress(jobId, percent, `Processing Scene ${scene.sequence_order}/${scenes.length}...`);
-                
-                // Pass the 'model' down to the service
-                await AssetService.generateAsset(projectId, scene.id, scene.visual_description, userId, keys, model);
-                completed++;
-            }
-            await JobService.updateProgress(jobId, 100, 'Visuals generated.');
-        } catch (e: any) {
-            console.error('Batch failed:', e);
-            await JobService.failJob(jobId, e.message);
-        }
-    })();
-
-    return NextResponse.json({ success: true, jobId });
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

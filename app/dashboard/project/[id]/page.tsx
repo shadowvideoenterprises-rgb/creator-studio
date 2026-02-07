@@ -1,133 +1,119 @@
 ﻿'use client'
-import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useState, useEffect, use } from 'react'
+import { Layers, Image as ImageIcon, Mic, Play, Clock, ArrowLeft } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
-import { ArrowLeft, BookOpen, Image as ImageIcon, Sparkles, LayoutList, FileText, Activity, Loader2 } from 'lucide-react'
-import { useToast } from '@/components/ToastProvider'
 import { Storyboard } from './components/Storyboard'
-import { ConceptTab } from './components/ConceptTab'
-import { ResearchTab } from './components/ResearchTab'
-import { Timeline } from './components/Timeline'
-import { Player } from './components/Player'
-import { BatchToolbar } from './components/BatchToolbar'
+import { TimelineStrip } from './components/TimelineStrip'
+import { useToast } from '@/components/ToastProvider'
+import Link from 'next/link'
 
-export default function ProjectWorkspace() {
-  const { id } = useParams()
-  const router = useRouter()
+export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params)
+  const projectId = resolvedParams.id
   const { toast } = useToast()
   
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('concept') 
   const [project, setProject] = useState<any>(null)
   const [scenes, setScenes] = useState<any[]>([])
-  const [knowledge, setKnowledge] = useState<any[]>([])
-  const [availableModels, setAvailableModels] = useState<string[]>([])
-  const [selectedModel, setSelectedModel] = useState('')
-  const [selectedTone, setSelectedTone] = useState('Engaging')
-  const [generating, setGenerating] = useState(false)
-  
-  const TONES = ['Engaging', 'Dark & Gritty', 'Funny/Sarcastic', 'Professional/Educational', 'Fast-Paced/TikTok', 'Dramatic/Cinematic']
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => { fetchProjectData() }, [])
+  useEffect(() => { fetchProject() }, [])
 
-  const fetchProjectData = async () => {
-    const { data: proj } = await supabase.from('projects').select('*').eq('id', id).single()
-    if (proj) setProject(proj)
+  const fetchProject = async () => {
+    const { data } = await supabase.from('projects').select('*').eq('id', projectId).single()
+    const { data: scn } = await supabase.from('scenes').select('*').eq('project_id', projectId).order('sequence_order')
     
-    // Fetch Scenes & Assets
-    // We need to join assets to play them
-    const { data: scn } = await supabase.from('scenes').select('*, scene_assets(*)').eq('project_id', id).order('sequence_order')
+    if (data) setProject(data)
     if (scn) setScenes(scn)
-    
-    const { data: knw } = await supabase.from('project_knowledge').select('*').eq('project_id', id).order('created_at', { ascending: false })
-    if (knw) setKnowledge(knw)
-    
     setLoading(false)
   }
 
-  const handleGenerateScript = async () => {
-      setGenerating(true)
-      toast(`Writing script...`, "loading")
-      const res = await fetch('/api/generate/script', {
-          method: 'POST',
-          body: JSON.stringify({ projectId: id, title: project.title, model: selectedModel, tone: selectedTone })
-      })
-      const data = await res.json()
-      if(data.success) { await fetchProjectData(); setActiveTab('script'); toast("Script Written!", "success"); } 
-      else { toast(data.error || "Generation Failed", "error"); }
-      setGenerating(false)
-  }
+  // Calculate Stats
+  const totalDuration = scenes.reduce((acc, s) => acc + (s.estimated_duration || 0), 0)
+  const totalImages = scenes.filter(s => s.image_url).length
+  const totalAudio = scenes.filter(s => s.audio_url).length
 
-  const handleReorder = async (sceneId: string, newIndex: number) => {
-      const oldScenes = [...scenes]
-      const oldIndex = scenes.findIndex(s => s.id === sceneId)
-      const [moved] = oldScenes.splice(oldIndex, 1)
-      oldScenes.splice(newIndex, 0, moved)
-      setScenes(oldScenes) 
-
-      const res = await fetch('/api/project/reorder', {
-          method: 'POST',
-          body: JSON.stringify({ projectId: id, sceneId, newIndex })
-      })
-      if (!res.ok) {
-          toast("Reorder failed", "error")
-          fetchProjectData() 
-      }
-  }
-
-  if (loading) return <div className="text-center p-20 text-slate-500">Loading Workspace...</div>
+  if (loading) return <div className="text-white p-10 flex items-center gap-2"><div className="w-4 h-4 bg-indigo-500 animate-pulse rounded-full"></div> Loading Studio...</div>
 
   return (
-    <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
-      {/* Header */}
-      <div className="fixed top-0 left-64 right-0 h-16 bg-black/80 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-8 z-10">
-          <div className="flex items-center gap-4">
-              <button onClick={() => router.back()} className="text-slate-400 hover:text-white"><ArrowLeft size={20}/></button>
-              <div><h1 className="font-bold text-lg max-w-md truncate">{project?.title || 'Untitled Project'}</h1></div>
-          </div>
-          <div className="flex items-center gap-3">
-             <button onClick={() => router.push(`/dashboard/project/${id}/launch`)} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg font-bold text-sm transition-all">🚀 Launch</button>
-             <button onClick={handleGenerateScript} disabled={generating} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg font-bold text-sm flex items-center gap-2 transition-all shadow-lg shadow-purple-900/20">{generating ? <Loader2 className="animate-spin" size={16}/> : <Sparkles size={16} />} <span>Generate</span></button>
-          </div>
+    <div className="flex h-screen bg-black text-white">
+      {/* SIDEBAR */}
+      <div className="w-64 border-r border-white/10 p-6 flex flex-col gap-2 bg-[#0a0a0a]">
+        <div className="font-bold text-xl mb-8 flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg"></div> Studio
+        </div>
+        
+        <Link href="/dashboard" className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-6 hover:text-white transition-colors">
+            <ArrowLeft size={12} /> Back to Projects
+        </Link>
+        
+        <div className="space-y-1">
+            <Link href={`/dashboard/project/${projectId}`} className="flex items-center gap-3 px-4 py-3 bg-indigo-600/10 text-indigo-400 rounded-xl font-bold border border-indigo-500/20">
+                <Layers size={18} /> Storyboard
+            </Link>
+            <Link href={`/dashboard/project/${projectId}/visuals`} className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+                <ImageIcon size={18} /> Visuals
+            </Link>
+            <Link href={`/dashboard/project/${projectId}/audio`} className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+                <Mic size={18} /> Audio
+            </Link>
+        </div>
+        
+        <div className="mt-auto pt-6 border-t border-white/10">
+            <div className="p-4 bg-white/5 rounded-xl border border-white/5 mb-4">
+                <div className="text-xs text-slate-400 mb-1">Project Status</div>
+                <div className="flex items-center gap-2 font-bold text-sm">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full"></span> {project?.status || 'Active'}
+                </div>
+            </div>
+            <Link href={`/dashboard/project/${projectId}/launch`} className="flex items-center justify-center gap-2 w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-slate-200 transition-colors">
+                <Play size={18} fill="black" /> Launch
+            </Link>
+        </div>
       </div>
 
-      <div className="flex-1 mt-16 p-8 overflow-y-auto pb-40">
-          {/* Tabs */}
-          <div className="flex gap-4 mb-8">
-               <button onClick={() => setActiveTab('concept')} className={`px-6 py-3 rounded-xl border flex items-center gap-2 font-bold transition-all ${activeTab === 'concept' ? 'bg-purple-900/20 border-purple-500 text-purple-400' : 'border-white/5 text-slate-500 hover:text-white'}`}><LayoutList size={18} /> Concept</button>
-               <button onClick={() => setActiveTab('research')} className={`px-6 py-3 rounded-xl border flex items-center gap-2 font-bold transition-all ${activeTab === 'research' ? 'bg-blue-900/20 border-blue-500 text-blue-400' : 'border-white/5 text-slate-500 hover:text-white'}`}><BookOpen size={18} /> Research</button>
-               <button onClick={() => setActiveTab('script')} className={`px-6 py-3 rounded-xl border flex items-center gap-2 font-bold transition-all ${activeTab === 'script' ? 'bg-emerald-900/20 border-emerald-500 text-emerald-400' : 'border-white/5 text-slate-500 hover:text-white'}`}><FileText size={18} /> Script</button>
-               <button onClick={() => setActiveTab('storyboard')} className={`px-6 py-3 rounded-xl border flex items-center gap-2 font-bold transition-all ${activeTab === 'storyboard' ? 'bg-pink-900/20 border-pink-500 text-pink-400' : 'border-white/5 text-slate-500 hover:text-white'}`}><ImageIcon size={18} /> Storyboard</button>
-               <button onClick={() => setActiveTab('timeline')} className={`px-6 py-3 rounded-xl border flex items-center gap-2 font-bold transition-all ${activeTab === 'timeline' ? 'bg-orange-900/20 border-orange-500 text-orange-400' : 'border-white/5 text-slate-500 hover:text-white'}`}><Activity size={18} /> Timeline</button>
-          </div>
+      {/* MAIN CONTENT */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* HEADER */}
+        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-[#0a0a0a]">
+            <h1 className="font-bold text-lg truncate max-w-md" title={project?.title}>{project?.title}</h1>
+            
+            {/* STATS */}
+            <div className="flex items-center gap-6 text-xs font-bold">
+                 <div className="flex items-center gap-2 text-slate-400 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+                    <Clock size={14} className={totalDuration > 65 ? "text-yellow-500" : "text-emerald-500"} />
+                    <span className="text-white">{totalDuration}s</span>
+                 </div>
+                 <div className="text-slate-500">
+                    <span className={totalImages === scenes.length ? "text-emerald-400" : "text-white"}>{totalImages}</span>/{scenes.length} Visuals
+                 </div>
+                 <div className="text-slate-500">
+                    <span className={totalAudio === scenes.length ? "text-emerald-400" : "text-white"}>{totalAudio}</span>/{scenes.length} Audio
+                 </div>
+            </div>
+        </header>
 
-          {activeTab === 'concept' && <ConceptTab projectId={id as string} project={project} model={selectedModel || 'gemini-2.5-flash'} onUpdate={fetchProjectData} />}
-          {activeTab === 'research' && <ResearchTab projectId={id as string} project={project} knowledge={knowledge} onUpdate={fetchProjectData} />}
-          {activeTab === 'storyboard' && <Storyboard projectId={id as string} scenes={scenes} onUpdate={fetchProjectData} />}
-          {activeTab === 'script' && (
-              <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
-                   {scenes.map((scene, i) => (
-                       <div key={scene.id} className="flex gap-6 p-6 rounded-2xl border border-white/5 bg-[#121214]">
-                           <div className="text-emerald-500 font-mono font-bold text-xl opacity-50">{(i+1).toString().padStart(2, '0')}</div>
-                           <div className="space-y-4 flex-1">
-                               <div><div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Visual</div><p className="text-slate-300 font-medium bg-black/20 p-3 rounded-lg border border-white/5">{scene.visual_description}</p></div>
-                               <div className="pl-4 border-l-2 border-emerald-500/20"><div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Voiceover</div><p className="text-white text-lg font-serif">{scene.audio_text}</p></div>
-                           </div>
-                       </div>
-                   ))}
-              </div>
-          )}
-          
-          {/* UPDATED TIMELINE TAB: Includes Player */}
-          {activeTab === 'timeline' && (
-              <div className="space-y-8 animate-in fade-in">
-                  <Player scenes={scenes} />
-                  <Timeline scenes={scenes} onReorder={handleReorder} />
-              </div>
-          )}
+        {/* TIMELINE STRIP */}
+        <TimelineStrip 
+            scenes={scenes} 
+            totalDuration={totalDuration} 
+            onSelectScene={(id) => {
+                const el = document.getElementById(`scene-${id}`);
+                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }} 
+        />
+
+        {/* WORKSPACE */}
+        <div className="flex-1 overflow-y-auto bg-black p-8">
+           <div className="max-w-7xl mx-auto pb-20">
+               <Storyboard 
+                    scenes={scenes} 
+                    onRegenerate={() => {
+                        toast("Regeneration coming in next batch", "success");
+                    }} 
+               />
+           </div>
+        </div>
       </div>
-
-      <BatchToolbar projectId={id as string} onUpdate={fetchProjectData} />
     </div>
   )
 }

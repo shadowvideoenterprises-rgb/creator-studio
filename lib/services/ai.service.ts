@@ -1,8 +1,8 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"
+﻿import { GoogleGenerativeAI } from "@google/generative-ai"
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { withRetry } from '@/lib/utils/retry'
 import { ScenesSchema } from '@/lib/validations/schemas'
-import { JobService } from '@/lib/services/job.service'
+import * as JobService from '@/lib/services/jobService'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
@@ -46,3 +46,4 @@ export class AIService {
     }
   }
 }
+

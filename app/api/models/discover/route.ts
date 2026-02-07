@@ -1,49 +1,41 @@
 ﻿import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabaseServer';
 import { ModelDiscoveryService } from '@/lib/services/modelDiscovery';
-import { supabaseAdmin } from '@/lib/supabaseServer'; 
 
 export async function POST(req: Request) {
   try {
     const { userId } = await req.json();
 
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized: No User ID provided' }, { status: 401 });
-    }
+    if (!userId) return NextResponse.json({ error: 'User ID required' }, { status: 400 });
 
-    // Get user's API keys from settings
+    // 1. Fetch Keys
     const { data: settings } = await supabaseAdmin
       .from('user_settings')
       .select('api_keys')
       .eq('user_id', userId)
       .single();
 
-    const keys = settings?.api_keys || {};
-    const discovery = new ModelDiscoveryService();
-    const results: any = { google: [], openai: [] };
-
-    // Discover Google models
-    if (keys.google) {
-      console.log("Scanning Google Models...");
-      results.google = await discovery.discoverGoogleModels(keys.google);
+    if (!settings?.api_keys) {
+      return NextResponse.json({ error: 'No API keys found' }, { status: 404 });
     }
 
-    // Store discovered models back into user settings
-    await supabaseAdmin
+    // 2. Scan
+    const discoveredModels = await ModelDiscoveryService.scanAll(settings.api_keys);
+
+    // 3. Save
+    const { error } = await supabaseAdmin
       .from('user_settings')
       .update({
-        available_models: results,
-        models_last_scanned: new Date().toISOString(),
+        available_models: discoveredModels,
+        models_last_scanned: new Date().toISOString()
       })
       .eq('user_id', userId);
 
-    return NextResponse.json({
-      success: true,
-      models: results,
-      scannedAt: new Date().toISOString(),
-    });
+    if (error) throw error;
+
+    return NextResponse.json({ success: true, models: discoveredModels });
 
   } catch (error: any) {
-    console.error('Discovery error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
