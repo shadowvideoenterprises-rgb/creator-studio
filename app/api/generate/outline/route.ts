@@ -9,8 +9,13 @@ export async function POST(req: Request) {
 
     if (!projectId) return NextResponse.json({ error: 'No Project ID' }, { status: 400 })
 
-    // 1. Get User Keys
+    // 1. Get Project & Keys
     const { data: project } = await supabaseAdmin.from('projects').select('user_id').eq('id', projectId).single()
+    
+    if (!project) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
     const { data: settings } = await supabaseAdmin.from('user_settings').select('api_keys').eq('user_id', project.user_id).single()
     const keys = settings?.api_keys || {}
 
@@ -39,7 +44,8 @@ export async function POST(req: Request) {
     }
     `
 
-    let resultData = {}
+    // FIX: Type as 'any' to prevent "Property does not exist" errors
+    let resultData: any = {}
 
     // --- GEMINI 3 EXECUTION ---
     if (model.includes('gemini') || model.includes('banana')) {

@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   ArrowLeft, Brain, Image as ImageIcon, Sparkles, BookOpen, 
-  Loader2, Mic, Wand2, Rocket, AlignLeft, LayoutList, FileText
+  Loader2, Mic, Wand2, Rocket, AlignLeft, LayoutList, FileText, Trash2
 } from 'lucide-react'
 import { useToast } from '@/components/ToastProvider'
 import { Storyboard } from './components/Storyboard'
@@ -17,7 +17,7 @@ export default function ProjectWorkspace() {
   
   // STATE
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('concept') // DEFAULT TO CONCEPT
+  const [activeTab, setActiveTab] = useState('concept') 
   const [project, setProject] = useState<any>(null)
   const [scenes, setScenes] = useState<any[]>([])
   const [knowledge, setKnowledge] = useState<any[]>([])
@@ -38,7 +38,6 @@ export default function ProjectWorkspace() {
   useEffect(() => { fetchProjectData() }, [])
 
   const fetchProjectData = async () => {
-    // FETCH NEW COLUMNS (outline, titles, thumbnails)
     const { data: proj } = await supabase.from('projects').select('*').eq('id', id).single()
     if (proj) setProject(proj)
     
@@ -63,7 +62,6 @@ export default function ProjectWorkspace() {
     setLoading(false)
   }
 
-  // ... (Keep existing handlers for Script/Revise) ...
   const handleGenerateScript = async () => {
       if (!selectedModel) { toast("Select a model first", "error"); return; }
       setGenerating(true)
@@ -137,7 +135,6 @@ export default function ProjectWorkspace() {
                       {TONES.map(t => <option key={t} value={t} className="bg-black text-white">{t}</option>)}
                   </select>
               </div>
-              {/* Only show Generate Script button if we are NOT in Concept tab (Concept tab has its own flow) */}
               {activeTab !== 'concept' && (
                   <button onClick={handleGenerateScript} disabled={generating} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg font-bold text-sm flex items-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-purple-900/20">
                       {generating ? <Loader2 className="animate-spin" size={16}/> : <Sparkles size={16} />} 
